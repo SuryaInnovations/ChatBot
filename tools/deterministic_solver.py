@@ -39,6 +39,20 @@ FOUNDATIONAL_KNOWLEDGE = {
     "gravity": (
         "Gravity is a fundamental natural phenomenon by which all things with mass or energy are attracted to one another.\n\n"
         "In classical mechanics (Newton's law), gravity is described as an attractive force proportional to mass and inversely proportional to the square of the distance. In general relativity (Einstein), gravity is the curvature of spacetime caused by mass and energy."
+    ),
+    "llm": (
+        "A Large Language Model (LLM) is an artificial intelligence model trained on vast quantities of text data using deep neural networks (specifically transformer architectures) to understand, generate, and reason with human language.\n\n"
+        "Key aspects include:\n"
+        "• **Core Architecture**: Built on self-attention transformer mechanisms capable of understanding context across long sequences.\n"
+        "• **Training Process**: Pre-trained on broad internet-scale data to predict subsequent tokens, followed by instruction fine-tuning and Reinforcement Learning from Human Feedback (RLHF).\n"
+        "• **Capabilities**: Text generation, code writing, translation, complex reasoning, summarization, and autonomous tool calling.\n"
+        "• **Leading Examples**: GPT-4, Google Gemini, Anthropic Claude, and Meta Llama."
+    ),
+    "artificial intelligence": (
+        "Artificial Intelligence (AI) is the field of computer science dedicated to creating systems capable of performing tasks that typically require human intelligence, such as visual perception, speech recognition, decision-making, and translation between languages."
+    ),
+    "machine learning": (
+        "Machine Learning (ML) is a subfield of artificial intelligence focused on building algorithms that learn patterns and improve performance from data over time without being explicitly programmed for every rule."
     )
 }
 

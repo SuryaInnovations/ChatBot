@@ -7,19 +7,23 @@ import os
 import sys
 import json
 import logging
+from dotenv import load_dotenv
 import streamlit as st
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(asctime)s - %(message)s")
 logger = logging.getLogger("chatbot.app")
 
-# Add workspace to path
+# Add workspace to path and load environment variables
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
+load_dotenv(os.path.join(current_dir, ".env"), override=False)
+
 from core.conversation import ConversationSession
-from core.provider_manager import ProviderManager, get_available_providers
+from core.llm_provider import LLMProvider
+from core.provider_manager import get_available_providers
 from core.orchestrator import ChatbotOrchestrator
 from tools.file_analyzer import analyze_file
 
@@ -44,16 +48,6 @@ st.markdown("""
         font-size: 1.0rem;
         margin-bottom: 1.5rem;
     }
-    .status-badge {
-        display: inline-block;
-        padding: 0.15rem 0.5rem;
-        border-radius: 6px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        margin-left: 0.5rem;
-    }
-    .badge-active { background-color: #DEF7EC; color: #03543F; }
-    .badge-inactive { background-color: #F3F4F6; color: #6B7280; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,7 +67,7 @@ with st.sidebar:
         "Primary AI Provider",
         options=provider_names,
         index=0,
-        help="Choose the primary provider. If it encounters a quota limit or error, configured fallbacks are automatically attempted."
+        help="Choose 'Auto' to let the system route to the best configured provider, or select a specific provider."
     )
     
     selected_cfg = next((p for p in available_providers if p["name"] == primary_choice), available_providers[0])
@@ -103,12 +97,28 @@ with st.sidebar:
         model_name = st.text_input("Local Model Name", value="llama3.2")
         base_url = st.text_input("Ollama Endpoint", value="http://localhost:11434/v1")
 
-    st.markdown("#### Configured Providers Status:")
+    # Update environment dynamically if key entered
+    if api_key and api_key.strip():
+        if selected_code == "groq":
+            os.environ["GROQ_API_KEY"] = api_key.strip()
+        elif selected_code == "gemini":
+            os.environ["GEMINI_API_KEY"] = api_key.strip()
+        elif selected_code == "openai":
+            os.environ["OPENAI_API_KEY"] = api_key.strip()
+
+    st.markdown("#### Provider Status:")
     for prov in available_providers:
-        # Check if active via env or current input
         is_cfg = prov["configured"] or (prov["code"] == selected_code and bool(api_key.strip()))
-        status_text = "🟢 Ready" if is_cfg else "⚪ No Key"
+        status_text = "🟢 Configured" if is_cfg else "⚪ Not Configured"
         st.caption(f"**{prov['name']}**: {status_text}")
+
+    # Developer Diagnostic Expander
+    with st.expander("🔍 Health Diagnostics", expanded=False):
+        temp_llm = LLMProvider(provider="auto")
+        diags = temp_llm.get_provider_diagnostics()
+        for d in diags:
+            st.write(f"**{d['name']}** (`{d['code']}`):")
+            st.caption(f"Status: `{d['status']}` | Configured: `{d['configured']}`")
 
     st.divider()
 
@@ -156,6 +166,7 @@ st.markdown('<div class="sub-title">Autonomous problem-solving system powered by
 
 # Quick Suggestion Chips
 chips = [
+    "what is llm",
     "what is physics",
     "2 + 5 * 10",
     "Explain Python list comprehensions simply.",
@@ -164,7 +175,7 @@ chips = [
 selected_chip = None
 chip_cols = st.columns(len(chips))
 for idx, chip in enumerate(chips):
-    chip_label = chip.replace("\n", " ")[:35] + ("..." if len(chip) > 35 else "")
+    chip_label = chip.replace("\n", " ")[:25] + ("..." if len(chip) > 25 else "")
     if chip_cols[idx].button(chip_label, key=f"chip_{idx}", use_container_width=True):
         selected_chip = chip
 
@@ -184,14 +195,14 @@ if prompt_to_process:
     with st.chat_message("user", avatar="🧑‍💻"):
         st.markdown(prompt_to_process)
 
-    # Initialize ProviderManager and Orchestrator cleanly
     try:
-        provider_manager = ProviderManager(
-            primary_provider=selected_code,
-            primary_model=model_name if model_name else None,
-            primary_key=api_key if api_key else None
+        # Initialize LLMProvider and Orchestrator
+        llm = LLMProvider(
+            provider=selected_code,
+            model=model_name if model_name else None,
+            api_key=api_key if api_key else None
         )
-        orchestrator = ChatbotOrchestrator(provider=provider_manager)
+        orchestrator = ChatbotOrchestrator(provider=llm)
 
         with st.chat_message("assistant", avatar="🤖"):
             status_box = st.status("Analyzing intent and routing...", expanded=False)
@@ -207,7 +218,7 @@ if prompt_to_process:
 
             status_box.update(label="Ready", state="complete", expanded=False)
 
-            # Render clean response
+            # Render response
             st.markdown(result.get("content", ""))
 
             # Render artifacts if any

@@ -15,6 +15,7 @@ from rich.panel import Panel
 from rich.markdown import Markdown
 from rich.prompt import Prompt
 
+import core.config
 from core.conversation import ConversationSession
 from core.llm_provider import LLMProvider
 from core.orchestrator import ChatbotOrchestrator

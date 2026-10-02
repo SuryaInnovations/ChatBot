@@ -1,223 +1,183 @@
 """
-LLM Provider module.
-Defines individual LLM provider integrations (Groq, Gemini, OpenAI, Ollama)
-and structured error classifications for robust fallback handling.
+Unified LLM Provider module.
+Manages provider routing, configurable fallback priority, loop safety,
+and unified generation interface.
 """
 
 import os
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable, Set
+
+from core.config import DEFAULT_PROVIDER, DEFAULT_FALLBACK_PROVIDERS, PROVIDER_TIMEOUT_SECONDS
+from core.providers import (
+    BaseProvider,
+    ProviderStatus,
+    ProviderError,
+    AuthenticationError,
+    QuotaExhaustedError,
+    RateLimitError,
+    ProviderConnectionError,
+    ModelUnavailableError,
+    InvalidRequestError,
+    PROVIDER_REGISTRY
+)
 
 logger = logging.getLogger("chatbot.llm_provider")
-
-class ProviderError(Exception):
-    """Base exception for provider calls."""
-    def __init__(self, message: str, status_code: Optional[int] = None, is_recoverable: bool = True):
-        super().__init__(message)
-        self.message = message
-        self.status_code = status_code
-        self.is_recoverable = is_recoverable
-
-class AuthenticationError(ProviderError):
-    def __init__(self, message: str = "Invalid API key or authentication failed"):
-        super().__init__(message, status_code=401, is_recoverable=True)
-
-class QuotaExhaustedError(ProviderError):
-    def __init__(self, message: str = "Quota exhausted / insufficient credits"):
-        super().__init__(message, status_code=429, is_recoverable=True)
-
-class RateLimitError(ProviderError):
-    def __init__(self, message: str = "Rate limit exceeded"):
-        super().__init__(message, status_code=429, is_recoverable=True)
-
-class ProviderConnectionError(ProviderError):
-    def __init__(self, message: str = "Connection failed or timed out"):
-        super().__init__(message, status_code=503, is_recoverable=True)
-
-class ModelUnavailableError(ProviderError):
-    def __init__(self, message: str = "Requested model is unavailable"):
-        super().__init__(message, status_code=404, is_recoverable=True)
-
-class InvalidRequestError(ProviderError):
-    def __init__(self, message: str = "Invalid request or prompt format"):
-        super().__init__(message, status_code=400, is_recoverable=False)
-
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("[%(levelname)s] %(asctime)s - %(message)s", datefmt="%H:%M:%S")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 class LLMProvider:
     """
-    Adapter for a single LLM provider instance.
-    Accepts only standard constructor arguments and translates provider-specific errors.
+    Unified LLM router and generation manager.
+    Supports specific provider selection as well as 'auto' with customizable fallback chains.
     """
     def __init__(
         self,
-        provider: str = "groq",
+        provider: str = "auto",
+        fallback_providers: Optional[List[str]] = None,
         model: Optional[str] = None,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        temperature: float = 0.2
+        temperature: float = 0.2,
+        timeout: float = PROVIDER_TIMEOUT_SECONDS
     ):
-        self.provider = provider.lower().strip()
-        self.api_key = api_key or os.environ.get(f"{self.provider.upper()}_API_KEY")
+        self.requested_provider = (provider or DEFAULT_PROVIDER).lower().strip()
+        self.fallback_providers = fallback_providers or list(DEFAULT_FALLBACK_PROVIDERS)
+        self.model = model
+        self.api_key = api_key
         self.base_url = base_url
         self.temperature = temperature
+        self.timeout = timeout
         
-        # Determine model defaults
-        if model and model.strip():
-            self.model = model.strip()
-        else:
-            if self.provider == "groq":
-                self.model = "llama-3.3-70b-versatile"
-            elif self.provider == "gemini":
-                self.model = "gemini-2.5-flash"
-            elif self.provider == "openai":
-                self.model = "gpt-4o-mini"
-            elif self.provider == "ollama":
-                self.model = "llama3.2"
-            else:
-                self.model = "llama-3.3-70b-versatile"
+        # For backwards compatibility with direct attribute reads
+        self.provider = self.requested_provider
+
+    def get_provider_diagnostics(self) -> List[Dict[str, Any]]:
+        """
+        Returns a developer-safe diagnostic report of all supported providers.
+        Never exposes keys or secrets.
+        """
+        diagnostics = []
+        for code, adapter_cls in PROVIDER_REGISTRY.items():
+            key_override = self.api_key if self.requested_provider == code else None
+            adapter = adapter_cls(api_key=key_override, base_url=self.base_url)
+            check = adapter.health_check()
+            diagnostics.append({
+                "code": code,
+                "name": adapter.name,
+                "default_model": adapter.default_model,
+                "configured": adapter.is_configured(),
+                "status": check.get("status", ProviderStatus.UNKNOWN_ERROR.value),
+                "message": check.get("message", "")
+            })
+        return diagnostics
+
+    def generate(
+        self,
+        messages: List[Dict[str, Any]],
+        system_prompt: str,
+        on_status_update: Optional[Callable[[str], None]] = None
+    ) -> Dict[str, Any]:
+        """
+        Executes generation using the requested provider or auto-fallback chain.
+        Guarantees loop protection (each provider attempted at most once).
+        """
+        # Determine priority order of providers to try
+        chain: List[str] = []
+        if self.requested_provider != "auto":
+            chain.append(self.requested_provider)
+
+        for p in self.fallback_providers:
+            p_code = p.lower().strip()
+            if p_code not in chain and p_code in PROVIDER_REGISTRY:
+                chain.append(p_code)
+
+        attempted: Set[str] = set()
+        diagnostics_log = []
+
+        for prov_code in chain:
+            if prov_code in attempted:
+                continue
+            attempted.add(prov_code)
+
+            adapter_cls = PROVIDER_REGISTRY.get(prov_code)
+            if not adapter_cls:
+                continue
+
+            # Check if this provider has an explicit key passed to constructor
+            key_override = self.api_key if (self.requested_provider == prov_code and self.api_key) else None
+            adapter = adapter_cls(api_key=key_override, model=self.model, base_url=self.base_url)
+
+            if not adapter.is_configured():
+                logger.info(f"[LLM] Skipping {adapter.name}: not configured.")
+                diagnostics_log.append(f"• {adapter.name}: Not configured")
+                continue
+
+            logger.info(f"[LLM] Selected provider: {adapter.name} (model: {self.model or adapter.default_model})")
+            if on_status_update:
+                on_status_update(f"Calling {adapter.name}...")
+
+            try:
+                response = adapter.generate(
+                    messages=messages,
+                    system_prompt=system_prompt,
+                    model=self.model,
+                    temperature=self.temperature,
+                    timeout=self.timeout
+                )
+                if response.get("success"):
+                    logger.info(f"[LLM] Success via {adapter.name}")
+                    return response
+
+            except InvalidRequestError as ire:
+                # User request or format error: do NOT cycle providers endlessly
+                logger.error(f"[LLM] Invalid user request on {adapter.name}: {ire.message}")
+                return {
+                    "success": False,
+                    "error": f"Invalid request: {ire.message}",
+                    "is_user_error": True,
+                    "provider": prov_code
+                }
+
+            except (AuthenticationError, QuotaExhaustedError, RateLimitError, ProviderConnectionError, ModelUnavailableError) as rec_err:
+                status_code = rec_err.status_code or 500
+                logger.warning(f"[LLM] Request failed on {adapter.name}: {status_code} - {rec_err.__class__.__name__}: {rec_err.message}")
+                diagnostics_log.append(f"• {adapter.name}: {rec_err.__class__.__name__} ({rec_err.message})")
+
+                if on_status_update:
+                    on_status_update(f"Provider {adapter.name} temporarily unavailable. Trying next configured provider...")
+                continue
+
+            except Exception as e:
+                logger.exception(f"[LLM] Unexpected error invoking {adapter.name}: {str(e)}")
+                diagnostics_log.append(f"• {adapter.name}: Error ({str(e)})")
+                continue
+
+        # If all providers failed or none configured
+        logger.error("[LLM] All configured providers failed or none available.")
+        
+        status_lines = "\n".join(diagnostics_log) if diagnostics_log else "No providers configured."
+        user_facing_error = (
+            "No AI provider is currently available.\n\n"
+            f"**Provider Status:**\n{status_lines}\n\n"
+            "Please configure at least one provider (Gemini, Groq, OpenAI, or Ollama) in your `.env` file or sidebar."
+        )
+
+        return {
+            "success": False,
+            "error": user_facing_error,
+            "diagnostics": diagnostics_log
+        }
 
     def chat_completion(
         self,
         messages: List[Dict[str, Any]],
-        system_prompt: str
+        system_prompt: str,
+        on_status_update: Optional[Callable[[str], None]] = None
     ) -> Dict[str, Any]:
-        """
-        Executes chat completion against this provider.
-        Raises classified ProviderError exceptions on failure.
-        """
-        if self.provider == "groq":
-            return self._call_groq(messages, system_prompt)
-        elif self.provider == "gemini":
-            return self._call_gemini(messages, system_prompt)
-        elif self.provider in ["openai", "ollama"]:
-            return self._call_openai_compatible(messages, system_prompt)
-        else:
-            raise ProviderError(f"Unsupported provider: '{self.provider}'", is_recoverable=True)
-
-    def _call_groq(self, messages: List[Dict[str, Any]], system_prompt: str) -> Dict[str, Any]:
-        if not self.api_key:
-            raise AuthenticationError("Groq API key is not configured.")
-
-        try:
-            import groq
-            client = groq.Groq(api_key=self.api_key)
-
-            formatted = [{"role": "system", "content": system_prompt}]
-            for m in messages:
-                if m.get("role") in ["user", "assistant"]:
-                    formatted.append({"role": m["role"], "content": m.get("content", "")})
-
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=formatted,
-                temperature=self.temperature
-            )
-            content = response.choices[0].message.content or ""
-            return {
-                "success": True,
-                "content": content.strip(),
-                "provider": "groq",
-                "model": self.model
-            }
-        except Exception as e:
-            err_str = str(e).lower()
-            if "invalid_api_key" in err_str or "unauthorized" in err_str or "authentication" in err_str:
-                raise AuthenticationError(f"Groq authentication failed: {str(e)}")
-            elif "rate_limit_exceeded" in err_str or "quota" in err_str or "429" in err_str:
-                raise QuotaExhaustedError(f"Groq quota or rate limit exceeded: {str(e)}")
-            elif "connection" in err_str or "timeout" in err_str:
-                raise ProviderConnectionError(f"Groq connection error: {str(e)}")
-            elif "model_not_found" in err_str or "not_found" in err_str:
-                raise ModelUnavailableError(f"Groq model unavailable: {str(e)}")
-            elif "bad_request" in err_str:
-                raise InvalidRequestError(f"Groq bad request: {str(e)}")
-            raise ProviderError(f"Groq unexpected error: {str(e)}", is_recoverable=True)
-
-    def _call_gemini(self, messages: List[Dict[str, Any]], system_prompt: str) -> Dict[str, Any]:
-        if not self.api_key:
-            raise AuthenticationError("Google Gemini API key is not configured.")
-
-        try:
-            from google import genai
-            client = genai.Client(api_key=self.api_key)
-
-            conversation_text = f"SYSTEM INSTRUCTIONS:\n{system_prompt}\n\nCONVERSATION:\n"
-            for m in messages:
-                if m.get("role") in ["user", "assistant"]:
-                    conversation_text += f"\n{m['role'].upper()}: {m.get('content', '')}\n"
-
-            response = client.models.generate_content(
-                model=self.model,
-                contents=conversation_text
-            )
-            content = response.text or ""
-            return {
-                "success": True,
-                "content": content.strip(),
-                "provider": "gemini",
-                "model": self.model
-            }
-        except Exception as e:
-            err_str = str(e).lower()
-            if "api_key" in err_str or "permission" in err_str or "unauthenticated" in err_str or "401" in err_str:
-                raise AuthenticationError(f"Gemini authentication failed: {str(e)}")
-            elif "resource_exhausted" in err_str or "quota" in err_str or "429" in err_str:
-                raise QuotaExhaustedError(f"Gemini quota exhausted: {str(e)}")
-            elif "connection" in err_str or "timeout" in err_str:
-                raise ProviderConnectionError(f"Gemini connection error: {str(e)}")
-            elif "not_found" in err_str or "404" in err_str:
-                raise ModelUnavailableError(f"Gemini model unavailable: {str(e)}")
-            elif "invalid_argument" in err_str or "bad_request" in err_str:
-                raise InvalidRequestError(f"Gemini bad request: {str(e)}")
-            raise ProviderError(f"Gemini unexpected error: {str(e)}", is_recoverable=True)
-
-    def _call_openai_compatible(self, messages: List[Dict[str, Any]], system_prompt: str) -> Dict[str, Any]:
-        is_ollama = (self.provider == "ollama")
-        if not is_ollama and not self.api_key:
-            raise AuthenticationError(f"{self.provider.capitalize()} API key is not configured.")
-
-        try:
-            import openai
-            kwargs = {}
-            if self.api_key:
-                kwargs["api_key"] = self.api_key
-            if self.base_url:
-                kwargs["base_url"] = self.base_url
-            elif is_ollama:
-                kwargs["base_url"] = "http://localhost:11434/v1"
-                if not self.api_key:
-                    kwargs["api_key"] = "ollama"
-
-            client = openai.OpenAI(**kwargs)
-            formatted = [{"role": "system", "content": system_prompt}]
-            for m in messages:
-                if m.get("role") in ["user", "assistant"]:
-                    formatted.append({"role": m["role"], "content": m.get("content", "")})
-
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=formatted,
-                temperature=self.temperature
-            )
-            content = response.choices[0].message.content or ""
-            return {
-                "success": True,
-                "content": content.strip(),
-                "provider": self.provider,
-                "model": self.model
-            }
-        except Exception as e:
-            err_str = str(e).lower()
-            if "insufficient_quota" in err_str or "credit_balance_exhausted" in err_str or "quota" in err_str:
-                raise QuotaExhaustedError("OpenAI quota exceeded: No remaining credits.")
-            elif "invalid_api_key" in err_str or "incorrect api key" in err_str or "401" in err_str:
-                raise AuthenticationError(f"{self.provider.capitalize()} invalid API key.")
-            elif "rate_limit" in err_str or "429" in err_str:
-                raise RateLimitError(f"{self.provider.capitalize()} rate limit exceeded.")
-            elif "connection" in err_str or "timeout" in err_str:
-                raise ProviderConnectionError(f"{self.provider.capitalize()} connection error: {str(e)}")
-            elif "not_found" in err_str or "does not exist" in err_str or "404" in err_str:
-                raise ModelUnavailableError(f"{self.provider.capitalize()} model not found: {str(e)}")
-            elif "bad_request" in err_str or "context_length" in err_str:
-                raise InvalidRequestError(f"{self.provider.capitalize()} invalid request: {str(e)}")
-            raise ProviderError(f"{self.provider.capitalize()} error: {str(e)}", is_recoverable=True)
+        """Backward-compatible alias for generate()."""
+        return self.generate(messages, system_prompt, on_status_update=on_status_update)

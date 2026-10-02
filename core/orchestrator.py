@@ -22,21 +22,20 @@ from tools.deterministic_solver import can_deterministic_tool_answer, solve_dete
 logger = logging.getLogger("chatbot.orchestrator")
 
 class ChatbotOrchestrator:
-    def __init__(self, provider: Union[LLMProvider, ProviderManager]):
-        if isinstance(provider, ProviderManager):
-            self.provider_manager = provider
-            self.provider = LLMProvider(provider=provider.primary_provider, model=provider.primary_model, api_key=provider.primary_key)
-        elif isinstance(provider, LLMProvider):
-            self.provider = provider
-            self.provider_manager = ProviderManager(
-                primary_provider=provider.provider,
-                primary_model=provider.model,
-                primary_key=provider.api_key,
-                temperature=provider.temperature
+    def __init__(self, provider: Union[LLMProvider, Any] = "auto"):
+        if isinstance(provider, LLMProvider):
+            self.llm = provider
+        elif hasattr(provider, "primary_provider"): # ProviderManager duck typing
+            self.llm = LLMProvider(
+                provider=provider.primary_provider,
+                model=getattr(provider, "primary_model", None),
+                api_key=getattr(provider, "primary_key", None),
+                fallback_providers=getattr(provider, "fallback_providers", None)
             )
+        elif isinstance(provider, str):
+            self.llm = LLMProvider(provider=provider)
         else:
-            self.provider_manager = ProviderManager()
-            self.provider = LLMProvider()
+            self.llm = LLMProvider()
 
         self.interview_session: Optional[InterviewSession] = None
 
@@ -139,7 +138,7 @@ class ChatbotOrchestrator:
         if pre_tool_context:
             system_prompt += f"\n--- VERIFIED CONTEXT ---\n{pre_tool_context}\n"
 
-        llm_response = self.provider_manager.execute_with_fallback(
+        llm_response = self.llm.generate(
             messages=session.messages,
             system_prompt=system_prompt,
             on_status_update=on_status_update
@@ -186,8 +185,8 @@ class ChatbotOrchestrator:
                     "model": "deterministic_solver"
                 }
 
-        # 8. HONEST USER-FACING ERROR (Step 14)
-        honest_error = (
+        # 8. HONEST USER-FACING ERROR (Step 14 & 18)
+        honest_error = llm_response.get("error") or (
             "AI generation is currently unavailable because no configured provider could complete the request.\n\n"
             "Please check your AI provider configuration or API quota."
         )
