@@ -1,27 +1,43 @@
 """
-Universal Request Pipeline Orchestrator with Intent-Driven Routing.
-Implements the exact routing and failure recovery tree.
+Universal Request Pipeline Orchestrator with Intent-Driven Routing and Robust Fallback.
+Adheres strictly to the Intent-First architecture and honest error handling.
 """
 
-from typing import Dict, Any, List, Optional, Callable
 import os
 import json
+import logging
+from typing import Dict, Any, List, Optional, Callable, Union
 
 from core.intent import detect_intent, IntentType
 from core.prompt import get_system_prompt
 from core.conversation import ConversationSession
 from core.llm_provider import LLMProvider
+from core.provider_manager import ProviderManager
 from core.interview import InterviewSession
 from tools.web_search import search_web
 from tools.math_solver import solve_math_expression, calculate_finance
-from tools.code_executor import execute_python_code
 from tools.file_analyzer import analyze_file
-from tools.doc_generator import generate_document
 from tools.deterministic_solver import can_deterministic_tool_answer, solve_deterministically
 
+logger = logging.getLogger("chatbot.orchestrator")
+
 class ChatbotOrchestrator:
-    def __init__(self, provider: LLMProvider):
-        self.provider = provider
+    def __init__(self, provider: Union[LLMProvider, ProviderManager]):
+        if isinstance(provider, ProviderManager):
+            self.provider_manager = provider
+            self.provider = LLMProvider(provider=provider.primary_provider, model=provider.primary_model, api_key=provider.primary_key)
+        elif isinstance(provider, LLMProvider):
+            self.provider = provider
+            self.provider_manager = ProviderManager(
+                primary_provider=provider.provider,
+                primary_model=provider.model,
+                primary_key=provider.api_key,
+                temperature=provider.temperature
+            )
+        else:
+            self.provider_manager = ProviderManager()
+            self.provider = LLMProvider()
+
         self.interview_session: Optional[InterviewSession] = None
 
     def process_message(
@@ -32,16 +48,17 @@ class ChatbotOrchestrator:
         on_status_update: Optional[Callable[[str], None]] = None
     ) -> Dict[str, Any]:
         """
-        Processes message through the Intent Detector and routes to the appropriate pipeline.
+        Processes message through the Intent Analyzer and executes optimal workflow.
         """
         query = user_message.strip()
 
-        # 1. INTENT DETECTOR
-        if on_status_update:
-            on_status_update("Detecting user intent...")
-
+        # 1. INTENT ANALYZER
         in_interview = bool(self.interview_session and self.interview_session.active)
         intent = detect_intent(query, session.attached_files, in_interview=in_interview)
+        logger.info(f"[ROUTER] Intent: {intent.value}")
+
+        if on_status_update:
+            on_status_update(f"Analyzing intent ({intent.value})...")
 
         # 2. Add user message to session
         session.add_message("user", query)
@@ -50,35 +67,61 @@ class ChatbotOrchestrator:
         generated_artifacts = []
         pre_tool_context = ""
 
-        # 3. ROUTE BASED ON INTENT
+        # 3. DIRECT DETERMINISTIC SHORT-CIRCUIT (Step 8)
+        # For pure simple arithmetic (e.g., '2 + 5 * 10'), do not call an expensive LLM
+        clean_arithmetic = query.strip()
+        import re
+        if (intent == IntentType.MATH_CALCULATION and 
+            re.match(r'^[\d\s\+\-\*\/\^\(\)\.\%]+$', clean_arithmetic) and 
+            re.search(r'[\+\-\*\/\^\%]', clean_arithmetic)):
+            
+            logger.info("[ROUTER] Pure arithmetic detected: executing deterministic math tool directly.")
+            det_res = solve_deterministically(intent, query)
+            if det_res and det_res.get("content"):
+                final_content = det_res["content"].strip()
+                executed_tools.append({"name": det_res.get("tool", "calculator"), "result": det_res.get("result")})
+                session.add_message("assistant", final_content)
+                if on_status_update:
+                    on_status_update("Done.")
+                return {
+                    "success": True,
+                    "content": final_content,
+                    "executed_tools": executed_tools,
+                    "generated_artifacts": [],
+                    "provider": "deterministic_calculator",
+                    "model": "sympy"
+                }
+
+        # 4. PRE-LLM TOOL GATHERING
         # A. Current / Latest Information -> Web Search first
         if intent == IntentType.CURRENT_INFO:
             if on_status_update:
-                on_status_update(f"Searching web for current information...")
+                on_status_update("Searching web for current information...")
             search_results = search_web(query, max_results=5)
             executed_tools.append({"name": "search_web", "result": search_results})
             pre_tool_context = f"\n\n[LIVE WEB SEARCH RESULTS]:\n{json.dumps(search_results, indent=2)}\n"
 
-        # B. Mathematical Calculation -> Calculator / SymPy first
+        # B. Complex Mathematical Calculation -> SymPy / Finance first
         elif intent == IntentType.MATH_CALCULATION:
             if on_status_update:
-                on_status_update("Evaluating mathematical calculation...")
+                on_status_update("Calculating mathematical expressions...")
             q_lower = query.lower()
             if any(term in q_lower for term in ["compound", "simple", "emi", "interest"]):
-                # Calculate finance
-                res = calculate_finance("compound" if "compound" in q_lower else "simple", 10000, 8, 3)
-                # If specific values in query, the deterministic solver handles it
+                det_math = solve_deterministically(intent, query)
+                if det_math:
+                    executed_tools.append({"name": det_math.get("tool"), "result": det_math.get("result")})
+                    pre_tool_context = f"\n\n[FINANCIAL CALCULATION]:\n{det_math.get('content')}\n"
             else:
                 res = solve_math_expression(query)
-            executed_tools.append({"name": "math_solver", "result": res})
-            pre_tool_context = f"\n\n[MATHEMATICAL ENGINE CALCULATION]:\n{json.dumps(res, indent=2)}\n"
+                executed_tools.append({"name": "math_solver", "result": res})
+                pre_tool_context = f"\n\n[MATHEMATICAL ENGINE CALCULATION]:\n{json.dumps(res, indent=2)}\n"
 
         # C. Uploaded Document -> File Search / Reader first
         elif intent == IntentType.DOCUMENT_ANALYSIS:
             if session.attached_files:
                 last_file = session.attached_files[-1]
                 if on_status_update:
-                    on_status_update(f"Reading attached document: {last_file['name']}...")
+                    on_status_update(f"Reading document: {last_file['name']}...")
                 file_analysis = analyze_file(last_file["path"])
                 executed_tools.append({"name": "analyze_file", "result": file_analysis})
                 pre_tool_context = f"\n\n[ATTACHED DOCUMENT ANALYSIS ({last_file['name']})]:\n{json.dumps(file_analysis, indent=2)}\n"
@@ -91,21 +134,18 @@ class ChatbotOrchestrator:
             else:
                 pre_tool_context = f"\n\n[WORKFLOW]: {self.interview_session.evaluate_and_next_prompt(query)}"
 
-        # 4. EXECUTE VIA LLM
-        if on_status_update:
-            on_status_update("Synthesizing response...")
-
-        # Build dynamic prompt with pre-tool verified context
+        # 5. INVOKE PROVIDER WITH AUTOMATIC FALLBACK
         system_prompt = get_system_prompt(custom_instructions=custom_instructions, active_files=session.attached_files)
         if pre_tool_context:
-            system_prompt += f"\n--- VERIFIED TOOL CONTEXT ---\n{pre_tool_context}\n"
+            system_prompt += f"\n--- VERIFIED CONTEXT ---\n{pre_tool_context}\n"
 
-        llm_response = self.provider.chat_completion(
+        llm_response = self.provider_manager.execute_with_fallback(
             messages=session.messages,
-            system_prompt=system_prompt
+            system_prompt=system_prompt,
+            on_status_update=on_status_update
         )
 
-        # 5. HANDLE LLM SUCCESS OR FAILURE
+        # 6. HANDLE SUCCESSFUL LLM RESPONSE
         if llm_response.get("success"):
             final_content = llm_response.get("content", "").strip()
             session.add_message("assistant", final_content)
@@ -120,8 +160,8 @@ class ChatbotOrchestrator:
                 "model": llm_response.get("model")
             }
 
-        # 6. LLM FAILED (NO AVAILABLE CONFIGURED PROVIDER)
-        # Check: Can local deterministic tool answer?
+        # 7. LLM PROVIDERS UNAVAILABLE -> CHECK DETERMINISTIC FALLBACK
+        logger.info("[ROUTER] LLM providers unavailable. Checking if local deterministic tools can answer.")
         if can_deterministic_tool_answer(intent, query, session.attached_files):
             if on_status_update:
                 on_status_update("Resolving with local deterministic engine...")
@@ -146,9 +186,11 @@ class ChatbotOrchestrator:
                     "model": "deterministic_solver"
                 }
 
-        # 7. HONEST ERROR
-        # If neither LLM nor deterministic tool can answer:
-        honest_error = "AI generation is temporarily unavailable. Please configure an available model provider."
+        # 8. HONEST USER-FACING ERROR (Step 14)
+        honest_error = (
+            "AI generation is currently unavailable because no configured provider could complete the request.\n\n"
+            "Please check your AI provider configuration or API quota."
+        )
         session.add_message("assistant", honest_error)
         if on_status_update:
             on_status_update("Unavailable.")
@@ -159,5 +201,6 @@ class ChatbotOrchestrator:
             "executed_tools": executed_tools,
             "generated_artifacts": [],
             "provider": None,
-            "model": None
+            "model": None,
+            "developer_log": llm_response.get("developer_log")
         }

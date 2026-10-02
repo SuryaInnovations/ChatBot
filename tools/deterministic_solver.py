@@ -1,12 +1,14 @@
 """
 Deterministic local solver module.
-Used when LLM providers are unavailable or when exact local execution (math, code, file analysis, verified knowledge) is sufficient.
-Strictly avoids fabricating or adding artificial warning banners to responses.
+Used when LLM providers are unavailable or when exact local execution
+(math, code debugging, file analysis, verified definitions) is sufficient.
+Strictly avoids artificial warning banners and has NO dependencies on core.
 """
 
 import re
+import ast
 from typing import Dict, Any, Optional
-from core.intent import IntentType
+
 from tools.math_solver import solve_math_expression, calculate_finance
 from tools.code_executor import execute_python_code
 from tools.file_analyzer import analyze_file
@@ -40,22 +42,24 @@ FOUNDATIONAL_KNOWLEDGE = {
     )
 }
 
-def can_deterministic_tool_answer(intent: IntentType, query: str, attached_files: Optional[list] = None) -> bool:
+def can_deterministic_tool_answer(intent_val: Any, query: str, attached_files: Optional[list] = None) -> bool:
     """
     Checks if a query can be answered accurately by local deterministic tools without an LLM.
+    intent_val can be an IntentType enum or string.
     """
+    intent_str = intent_val.value if hasattr(intent_val, "value") else str(intent_val).lower()
     q_lower = query.strip().lower()
 
-    if intent == IntentType.MATH_CALCULATION:
+    if "math" in intent_str:
         return True
 
-    if intent == IntentType.DATA_ANALYSIS or (intent == IntentType.PROGRAMMING and "```" in query):
+    if "data" in intent_str or ("program" in intent_str and ("```" in query or "for " in query or "def " in query or "syntax error" in q_lower or "debug" in q_lower)):
         return True
 
-    if intent == IntentType.DOCUMENT_ANALYSIS and attached_files and len(attached_files) > 0:
+    if "document" in intent_str and attached_files and len(attached_files) > 0:
         return True
 
-    if intent == IntentType.CURRENT_INFO:
+    if "current" in intent_str:
         return True
 
     # Check foundational definitions
@@ -65,14 +69,15 @@ def can_deterministic_tool_answer(intent: IntentType, query: str, attached_files
 
     return False
 
-def solve_deterministically(intent: IntentType, query: str, attached_files: Optional[list] = None) -> Optional[Dict[str, Any]]:
+def solve_deterministically(intent_val: Any, query: str, attached_files: Optional[list] = None) -> Optional[Dict[str, Any]]:
     """
     Executes the appropriate local deterministic tool and formats a clean response.
     """
+    intent_str = intent_val.value if hasattr(intent_val, "value") else str(intent_val).lower()
     q_lower = query.strip().lower()
 
     # 1. Math / Financial Calculation
-    if intent == IntentType.MATH_CALCULATION:
+    if "math" in intent_str:
         # Check financial interest
         if any(term in q_lower for term in ["compound interest", "simple interest", "emi", "interest for"]):
             p_match = re.search(r'(?:₹|\$|rs\.?|principal\s*of)?\s*(\d[\d,]*(?:\.\d+)?)', query, re.I)
@@ -103,7 +108,7 @@ def solve_deterministically(intent: IntentType, query: str, attached_files: Opti
             )
             return {"content": content, "tool": "calculate_finance", "result": res}
 
-        # Symbolic / General Math
+        # Symbolic / Arithmetic Math (e.g., "2 + 5 * 10", "solve x^2 - 5x + 6 = 0")
         task_type = "derivative" if "derivative" in q_lower else ("integral" if "integral" in q_lower else ("solve_equation" if "=" in query else "eval"))
         clean_expr = query
         for prefix in ["solve", "calculate", "find", "evaluate", "what is"]:
@@ -112,27 +117,88 @@ def solve_deterministically(intent: IntentType, query: str, attached_files: Opti
 
         res = solve_math_expression(clean_expr, task_type)
         if res.get("success"):
-            sol = res.get("solutions") or res.get("numeric") or res.get("derivative") or res.get("integral") or res.get("result")
-            content = f"**Problem:**\n${clean_expr}$\n\n**Final Answer:**\n{sol}"
+            exact_val = res.get("exact")
+            numeric_val = res.get("numeric")
+            solutions = res.get("solutions")
+            
+            # Format clean output
+            if exact_val is not None:
+                final_val = exact_val
+            elif numeric_val is not None:
+                final_val = str(int(numeric_val) if isinstance(numeric_val, (int, float)) and numeric_val == int(numeric_val) else numeric_val)
+            elif solutions is not None:
+                final_val = f"Solutions: {', '.join(solutions)}"
+            else:
+                final_val = str(res.get("result"))
+
+            # For simple pure arithmetic like "2 + 5 * 10", return direct concise answer
+            if re.match(r'^[\d\s\+\-\*\/\^\(\)\.\%]+$', clean_expr):
+                content = f"**Calculation:**\n`{clean_expr}` = **{final_val}**"
+            else:
+                content = f"**Problem:**\n${clean_expr}$\n\n**Final Answer:**\n{final_val}"
+
             return {"content": content, "tool": "solve_math", "result": res}
 
-    # 2. Python Code Execution
-    if (intent == IntentType.PROGRAMMING or intent == IntentType.DATA_ANALYSIS) and "```" in query:
-        code_block = query.split("```")[1]
-        if code_block.startswith("python"):
-            code_block = code_block[6:].strip()
-        res = execute_python_code(code_block)
-        stdout = res.get("stdout", "")
-        stderr = res.get("stderr", "")
-        imgs = res.get("generated_images", [])
+    # 2. Python Code Debugging & Execution
+    if "program" in intent_str or "data" in intent_str:
+        # Check if code block or raw code
+        raw_code = ""
+        if "```" in query:
+            raw_code = query.split("```")[1]
+            if raw_code.startswith("python"):
+                raw_code = raw_code[6:].strip()
+        elif "for " in query or "def " in query:
+            # Extract code lines after debug/fix
+            lines = query.splitlines()
+            code_lines = [l for l in lines if not any(l.lower().startswith(p) for p in ["debug", "fix", "check", "run"])]
+            raw_code = "\n".join(code_lines).strip()
 
-        content = "```text\n" + (stdout if stdout else "(Code executed successfully with no output)") + "\n```"
-        if stderr:
-            content += f"\n\n**Diagnostic output:**\n```text\n{stderr}\n```"
-        return {"content": content, "tool": "execute_python_code", "result": res, "images": imgs}
+        if raw_code and ("debug" in q_lower or "fix" in q_lower or "error" in q_lower):
+            # Deterministic Python Syntax Diagnostic via AST
+            try:
+                ast.parse(raw_code)
+                # If syntax is valid, test execution
+                exec_res = execute_python_code(raw_code)
+                if exec_res.get("success"):
+                    content = f"**Code Analysis:**\nNo syntax errors found.\n\n**Output:**\n```text\n{exec_res.get('stdout', '(Executed with no output)')}\n```"
+                else:
+                    content = f"**Runtime Error Detected:**\n```text\n{exec_res.get('stderr')}\n```"
+                return {"content": content, "tool": "code_executor", "result": exec_res}
+            except SyntaxError as syn_err:
+                # Identify missing colon or syntax issue
+                msg_err = syn_err.msg
+                lineno = syn_err.lineno or 1
+                lines = raw_code.splitlines()
+                problematic_line = lines[lineno - 1] if lineno <= len(lines) else ""
+                
+                # Propose fix
+                fixed_lines = list(lines)
+                if "expected ':'" in msg_err and problematic_line and not problematic_line.strip().endswith(":"):
+                    fixed_lines[lineno - 1] = problematic_line + ":"
+                corrected_code = "\n".join(fixed_lines)
+
+                content = (
+                    f"**Syntax Error Identified:**\n"
+                    f"- Error: `{msg_err}` on line {lineno}: `{problematic_line}`\n"
+                    f"- **Fix**: Add a colon (`:`) at the end of line {lineno}.\n\n"
+                    f"**Corrected Code:**\n"
+                    f"```python\n{corrected_code}\n```"
+                )
+                return {"content": content, "tool": "code_syntax_analyzer", "result": {"syntax_error": str(syn_err)}}
+
+        elif raw_code:
+            res = execute_python_code(raw_code)
+            stdout = res.get("stdout", "")
+            stderr = res.get("stderr", "")
+            imgs = res.get("generated_images", [])
+
+            content = "```text\n" + (stdout if stdout else "(Code executed successfully with no output)") + "\n```"
+            if stderr:
+                content += f"\n\n**Diagnostic output:**\n```text\n{stderr}\n```"
+            return {"content": content, "tool": "execute_python_code", "result": res, "images": imgs}
 
     # 3. Document Analysis
-    if intent == IntentType.DOCUMENT_ANALYSIS and attached_files:
+    if "document" in intent_str and attached_files:
         f = attached_files[-1]
         analysis = analyze_file(f["path"])
         if analysis.get("success"):
@@ -157,7 +223,7 @@ def solve_deterministically(intent: IntentType, query: str, attached_files: Opti
             return {"content": content, "tool": "analyze_file", "result": analysis}
 
     # 4. Web Search (live factual snippets)
-    if intent == IntentType.CURRENT_INFO:
+    if "current" in intent_str:
         res = search_web(query, max_results=4)
         if res and isinstance(res, list) and len(res) > 0 and res[0].get("title"):
             lines = []

@@ -1,13 +1,17 @@
 """
 All-in-One AI Assistant — Streamlit Web Application.
-Implements intent-driven routing, tool chaining, and clean responses.
+Implements intent-driven routing, multi-provider fallback, and resilient error handling.
 """
 
 import os
 import sys
 import json
+import logging
 import streamlit as st
-from datetime import datetime
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(asctime)s - %(message)s")
+logger = logging.getLogger("chatbot.app")
 
 # Add workspace to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -15,7 +19,7 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 from core.conversation import ConversationSession
-from core.llm_provider import LLMProvider
+from core.provider_manager import ProviderManager, get_available_providers
 from core.orchestrator import ChatbotOrchestrator
 from tools.file_analyzer import analyze_file
 
@@ -40,6 +44,16 @@ st.markdown("""
         font-size: 1.0rem;
         margin-bottom: 1.5rem;
     }
+    .status-badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-left: 0.5rem;
+    }
+    .badge-active { background-color: #DEF7EC; color: #03543F; }
+    .badge-inactive { background-color: #F3F4F6; color: #6B7280; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -51,50 +65,50 @@ if "session" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Model Configuration")
     
-    primary_provider = st.selectbox(
-        "Primary Provider",
-        options=["Groq (Recommended Free Tier)", "Google Gemini", "OpenAI", "Ollama (Local)"],
+    # Dynamic check of configured providers
+    available_providers = get_available_providers()
+    provider_names = [p["name"] for p in available_providers]
+    
+    primary_choice = st.selectbox(
+        "Primary AI Provider",
+        options=provider_names,
         index=0,
-        help="Choose the primary LLM provider. Fallbacks will automatically be attempted if configured."
+        help="Choose the primary provider. If it encounters a quota limit or error, configured fallbacks are automatically attempted."
     )
     
-    provider_map = {
-        "Groq (Recommended Free Tier)": "groq",
-        "Google Gemini": "gemini",
-        "OpenAI": "openai",
-        "Ollama (Local)": "ollama"
-    }
-    selected_code = provider_map[primary_provider]
+    selected_cfg = next((p for p in available_providers if p["name"] == primary_choice), available_providers[0])
+    selected_code = selected_cfg["code"]
 
     api_key = ""
     model_name = ""
 
     if selected_code == "groq":
         model_name = st.selectbox("Model", ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-8b-instant"])
-        api_key = st.text_input("Groq API Key", value=os.environ.get("GROQ_API_KEY", ""), type="password", placeholder="gsk_...")
-        st.caption("Free instant keys at [console.groq.com](https://console.groq.com)")
+        env_groq = os.environ.get("GROQ_API_KEY", "")
+        api_key = st.text_input("Groq API Key", value=env_groq, type="password", placeholder="gsk_...")
+        st.caption("Get free instant keys at [console.groq.com](https://console.groq.com)")
 
     elif selected_code == "gemini":
         model_name = st.selectbox("Model", ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"])
-        api_key = st.text_input("Gemini API Key", value=os.environ.get("GEMINI_API_KEY", ""), type="password", placeholder="AIza...")
-        st.caption("Free keys at [aistudio.google.com](https://aistudio.google.com)")
+        env_gemini = os.environ.get("GEMINI_API_KEY", "")
+        api_key = st.text_input("Gemini API Key", value=env_gemini, type="password", placeholder="AIza...")
+        st.caption("Get free keys at [aistudio.google.com](https://aistudio.google.com)")
 
     elif selected_code == "openai":
         model_name = st.selectbox("Model", ["gpt-4o-mini", "gpt-4o", "o3-mini"])
-        api_key = st.text_input("OpenAI API Key", value=os.environ.get("OPENAI_API_KEY", ""), type="password", placeholder="sk-proj-...")
+        env_openai = os.environ.get("OPENAI_API_KEY", "")
+        api_key = st.text_input("OpenAI API Key", value=env_openai, type="password", placeholder="sk-proj-...")
 
     elif selected_code == "ollama":
         model_name = st.text_input("Local Model Name", value="llama3.2")
         base_url = st.text_input("Ollama Endpoint", value="http://localhost:11434/v1")
 
-    # Build fallback providers list from environment or other inputs
-    fallbacks = []
-    if selected_code != "groq" and os.environ.get("GROQ_API_KEY"):
-        fallbacks.append({"provider": "groq", "model": "llama-3.3-70b-versatile", "api_key": os.environ.get("GROQ_API_KEY")})
-    if selected_code != "gemini" and os.environ.get("GEMINI_API_KEY"):
-        fallbacks.append({"provider": "gemini", "model": "gemini-2.5-flash", "api_key": os.environ.get("GEMINI_API_KEY")})
-    if selected_code != "openai" and os.environ.get("OPENAI_API_KEY"):
-        fallbacks.append({"provider": "openai", "model": "gpt-4o-mini", "api_key": os.environ.get("OPENAI_API_KEY")})
+    st.markdown("#### Configured Providers Status:")
+    for prov in available_providers:
+        # Check if active via env or current input
+        is_cfg = prov["configured"] or (prov["code"] == selected_code and bool(api_key.strip()))
+        status_text = "🟢 Ready" if is_cfg else "⚪ No Key"
+        st.caption(f"**{prov['name']}**: {status_text}")
 
     st.divider()
 
@@ -138,19 +152,20 @@ with st.sidebar:
 
 # Main UI Header
 st.markdown('<div class="main-title">🤖 All-in-One AI Assistant</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Intent-driven problem-solving engine with automatic tool routing</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Autonomous problem-solving system powered by intent recognition & resilient provider fallback</div>', unsafe_allow_html=True)
 
 # Quick Suggestion Chips
 chips = [
-    "What is physics?",
-    "Compound interest on ₹25,000 at 8% for 3 years",
-    "Latest features in Python 3.14",
-    "Solve equation: x^2 - 5x + 6 = 0"
+    "what is physics",
+    "2 + 5 * 10",
+    "Explain Python list comprehensions simply.",
+    "Debug this Python code:\nfor i in range(5)\n    print(i)"
 ]
 selected_chip = None
 chip_cols = st.columns(len(chips))
 for idx, chip in enumerate(chips):
-    if chip_cols[idx].button(chip, key=f"chip_{idx}", use_container_width=True):
+    chip_label = chip.replace("\n", " ")[:35] + ("..." if len(chip) > 35 else "")
+    if chip_cols[idx].button(chip_label, key=f"chip_{idx}", use_container_width=True):
         selected_chip = chip
 
 # Display History
@@ -169,44 +184,50 @@ if prompt_to_process:
     with st.chat_message("user", avatar="🧑‍💻"):
         st.markdown(prompt_to_process)
 
-    llm_provider = LLMProvider(
-        provider=selected_code,
-        model=model_name if model_name else None,
-        api_key=api_key if api_key else None,
-        fallback_providers=fallbacks
-    )
-    orchestrator = ChatbotOrchestrator(provider=llm_provider)
-
-    with st.chat_message("assistant", avatar="🤖"):
-        status_box = st.status("Processing intent & routing...", expanded=False)
-
-        def update_status(text: str):
-            status_box.update(label=text)
-
-        result = orchestrator.process_message(
-            session=st.session_state.session,
-            user_message=prompt_to_process,
-            on_status_update=update_status
+    # Initialize ProviderManager and Orchestrator cleanly
+    try:
+        provider_manager = ProviderManager(
+            primary_provider=selected_code,
+            primary_model=model_name if model_name else None,
+            primary_key=api_key if api_key else None
         )
+        orchestrator = ChatbotOrchestrator(provider=provider_manager)
 
-        status_box.update(label="Response ready", state="complete", expanded=False)
+        with st.chat_message("assistant", avatar="🤖"):
+            status_box = st.status("Analyzing intent and routing...", expanded=False)
 
-        # Render clean answer
-        st.markdown(result.get("content", ""))
+            def update_status(text: str):
+                status_box.update(label=text)
 
-        # Render artifacts if any
-        artifacts = result.get("generated_artifacts", [])
-        for art in artifacts:
-            if art["type"] == "image":
-                st.image(art["path"], caption=art["name"], use_column_width=True)
-            elif art["type"] == "document":
-                with open(art["path"], "rb") as f:
-                    file_bytes = f.read()
-                st.download_button(
-                    label=f"📥 Download {art['name']}",
-                    data=file_bytes,
-                    file_name=art["name"],
-                    mime="application/octet-stream"
-                )
+            result = orchestrator.process_message(
+                session=st.session_state.session,
+                user_message=prompt_to_process,
+                on_status_update=update_status
+            )
+
+            status_box.update(label="Ready", state="complete", expanded=False)
+
+            # Render clean response
+            st.markdown(result.get("content", ""))
+
+            # Render artifacts if any
+            artifacts = result.get("generated_artifacts", [])
+            for art in artifacts:
+                if art["type"] == "image":
+                    st.image(art["path"], caption=art["name"], use_column_width=True)
+                elif art["type"] == "document":
+                    with open(art["path"], "rb") as f:
+                        file_bytes = f.read()
+                    st.download_button(
+                        label=f"📥 Download {art['name']}",
+                        data=file_bytes,
+                        file_name=art["name"],
+                        mime="application/octet-stream"
+                    )
+
+    except Exception as e:
+        logger.exception("Unexpected execution error in chat handling")
+        # Step 9: User-friendly error message, never expose raw Python tracebacks
+        st.error("I couldn't initialize the selected AI provider. Please check the provider configuration.")
 
     st.rerun()

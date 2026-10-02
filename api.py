@@ -59,13 +59,13 @@ def chat_endpoint(req: ChatRequest):
     if session_id not in sessions:
         sessions[session_id] = ConversationSession(session_id=session_id)
     
-    session = sessions[session_id]
-    llm = LLMProvider(
-        provider=req.provider or "groq",
-        model=req.model,
-        api_key=req.api_key
+    from core.provider_manager import ProviderManager
+    manager = ProviderManager(
+        primary_provider=req.provider or "groq",
+        primary_model=req.model,
+        primary_key=req.api_key
     )
-    orchestrator = ChatbotOrchestrator(provider=llm)
+    orchestrator = ChatbotOrchestrator(provider=manager)
 
     result = orchestrator.process_message(
         session=session,

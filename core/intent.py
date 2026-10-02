@@ -52,7 +52,13 @@ def detect_intent(message: str, attached_files: Optional[List[Dict[str, Any]]] =
         return IntentType.INTERVIEW
 
     # 4. Mathematical & Financial Calculations
-    # Check for math formulas, equations, or finance keywords
+    # Check for pure arithmetic (e.g., '2 + 5 * 10', '(100 - 20) / 4')
+    is_pure_arithmetic = bool(
+        re.match(r'^[\d\s\+\-\*\/\^\(\)\.\%]+$', msg) and
+        re.search(r'[\+\-\*\/\^\%]', msg) and
+        re.search(r'\d', msg)
+    )
+
     has_finance = any(term in msg_lower for term in [
         "compound interest", "simple interest", "emi", "interest rate",
         "principal", "annual interest", "calculate emi"
@@ -63,7 +69,7 @@ def detect_intent(message: str, attached_files: Optional[List[Dict[str, Any]]] =
         "square root", "factorize", "find x", "eval"
     ])
 
-    if has_finance or (has_math_keywords and has_math_ops):
+    if is_pure_arithmetic or has_finance or (has_math_keywords and has_math_ops):
         return IntentType.MATH_CALCULATION
 
     # 5. Data Analysis (tabular datasets, statistics, charts)
