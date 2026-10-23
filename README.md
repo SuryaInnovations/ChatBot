@@ -1,6 +1,6 @@
 # ⚡ SPARK-AI: Autonomous Problem-Solving Engine & Verification System
 
-[![CI Pipeline](https://github.com/user/spark-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/user/spark-ai/actions/workflows/ci.yml)
+[![CI Pipeline](https://github.com/SuryaInnovations/ChatBot/actions/workflows/ci.yml/badge.svg)](https://github.com/SuryaInnovations/ChatBot/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 [![Python: 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Tool Correctness Benchmark](https://img.shields.io/badge/Tool%20Suite-99%2F100-brightgreen.svg)](tests/eval_suite.py)
