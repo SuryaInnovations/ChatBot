@@ -209,14 +209,18 @@ def test_flexibility_pluggable_custom_provider():
         def generate_stream(self, messages: List[Dict[str, Any]], system_prompt: str = "", **kwargs):
             yield "Custom token"
 
-    # Register dynamic provider
-    register_provider("custom_plug", MockCustomProvider)
-    assert "custom_plug" in PROVIDER_REGISTRY
+    try:
+        # Register dynamic provider
+        register_provider("custom_plug", MockCustomProvider)
+        assert "custom_plug" in PROVIDER_REGISTRY
 
-    # Instantiate via dynamic registry
-    inst = PROVIDER_REGISTRY["custom_plug"]()
-    out = inst.generate([{"role": "user", "content": "hi"}])
-    assert out["content"] == "Hello from custom pluggable provider!"
+        # Instantiate via dynamic registry
+        inst = PROVIDER_REGISTRY["custom_plug"]()
+        out = inst.generate([{"role": "user", "content": "hi"}])
+        assert out["content"] == "Hello from custom pluggable provider!"
+    finally:
+        from core.providers import PROVIDER_REGISTRY
+        PROVIDER_REGISTRY.pop("custom_plug", None)
 
 
 def test_flexibility_pluggable_custom_tool():

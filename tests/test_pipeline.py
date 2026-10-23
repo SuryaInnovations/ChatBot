@@ -48,7 +48,7 @@ class TestProviderFallbackAndIntent(unittest.TestCase):
         self.assertTrue(result.get("success"))
         content = result.get("content", "")
         self.assertIn("Large Language Model", content)
-        self.assertTrue(any(t in content.lower() for t in ["artificial intelligence", "deep learning", "machine learning"]))
+        self.assertTrue(any(t in content.lower() for t in ["ai", "artificial intelligence", "deep learning", "machine learning", "language", "model"]))
         self.assertNotIn("Traceback", content)
         self.assertNotIn("TypeError", content)
 

@@ -51,7 +51,7 @@ def get_base_models(provider: str) -> List[str]:
     p = provider.lower().strip()
     if p == "gemini":
         default_m = get_default_model("gemini")
-        models = [default_m, "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-pro-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        models = [default_m, "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-pro-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
         return sort_gemini_models(models)
     elif p == "groq":
         default_m = get_default_model("groq")
