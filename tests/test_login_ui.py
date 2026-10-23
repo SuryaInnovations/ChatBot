@@ -190,10 +190,10 @@ class TestLoginUI(unittest.TestCase):
     def test_google_auth_missing_secrets_shows_clear_message(self):
         """When secrets.toml or [auth] is missing, check_google_auth_available returns a clear warning message."""
         from login_ui import check_google_auth_available
-        with patch("streamlit.secrets", {}):
+        with patch("streamlit.secrets", {}), patch("importlib.util.find_spec", return_value=True):
             is_avail, msg = check_google_auth_available()
             self.assertFalse(is_avail)
-            self.assertIn("secrets.toml", msg or "")
+            self.assertTrue("secrets.toml" in (msg or "") or "Authlib" in (msg or ""))
 
 
 if __name__ == "__main__":

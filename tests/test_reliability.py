@@ -109,6 +109,9 @@ class TestReliabilitySuite(unittest.TestCase):
 
 
     def test_05_db_idempotency_and_zero_loss(self):
+        from db.session import async_engine
+        if async_engine is None:
+            self.skipTest("Async database engine is not available")
         async def run_db():
             await init_db()
             async with get_db_session() as session:

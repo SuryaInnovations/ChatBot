@@ -9,6 +9,10 @@ on:
 jobs:
   test-and-eval:
     runs-on: ubuntu-latest
+    env:
+      ALLOW_UNSAFE_SUBPROCESS: "1"
+      CI: "true"
+      PYTHONPATH: "."
     strategy:
       matrix:
         python-version: ["3.12"]

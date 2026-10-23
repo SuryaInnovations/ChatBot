@@ -19,8 +19,8 @@ def clean_voice_transcript(text: str) -> str:
     if not text:
         return ""
     t = text.strip()
-    # Preserve raw code blocks and explicit SQL/programming definitions untouched
-    if "```" in t or t.startswith(("def ", "class ", "import ", "from ", "SELECT ", "select ")):
+    # Preserve raw code blocks, multiline code/prompts, and explicit SQL/programming definitions untouched
+    if "\n" in t or "```" in t or t.startswith(("def ", "class ", "import ", "from ", "SELECT ", "select ", "Debug ", "debug ")):
         return t
 
     # 1. Common Phonetic STT corrections for developer & technical terms
@@ -61,7 +61,7 @@ def clean_voice_transcript(text: str) -> str:
     t = re.sub(r'\s*,\s*,+', ',', t)
     t = re.sub(r'^[,\s]+', '', t)
     t = re.sub(r'[,\s]+$', '', t)
-    t = re.sub(r'\s+', ' ', t).strip()
+    t = re.sub(r'[^\S\r\n]+', ' ', t).strip()
 
     # 5. Capitalize first letter while preserving casing of acronyms (API, SQL, etc.)
     if t:
