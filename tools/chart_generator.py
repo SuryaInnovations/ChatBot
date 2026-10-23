@@ -35,11 +35,11 @@ def generate_chart(
     chart_type = chart_type.lower().strip()
     clean_title = title.strip() or "Generated Chart"
     df = pd.DataFrame(data)
+    cols = list(df.columns)
 
     try:
         import plotly.express as px
         fig = None
-        cols = list(df.columns)
 
         x_col = cols[0] if cols else "x"
         y_col = cols[1] if len(cols) > 1 else cols[0]
