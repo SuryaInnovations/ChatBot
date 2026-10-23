@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: spark-ai
+    runtime: python
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: python -m streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: ALLOW_UNSAFE_SUBPROCESS
+        value: "1"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
