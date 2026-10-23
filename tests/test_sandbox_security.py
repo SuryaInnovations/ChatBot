@@ -204,7 +204,7 @@ def test_docker_container_network_memory_and_timeout():
         # 2. Assert memory limit (128MB limit triggers MemoryError or killed exit code)
         mem_code = (
             "try:\n"
-            "    data = bytearray(256 * 1024 * 1024)\n"
+            "    data = bytearray(512 * 1024 * 1024)\n"
             "    print('ALLOCATED')\n"
             "except MemoryError:\n"
             "    print('MEMORY_LIMIT_HIT')\n"

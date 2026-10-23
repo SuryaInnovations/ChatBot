@@ -192,24 +192,26 @@ def is_docker_available() -> bool:
         return False
 
 
-def _execute_in_docker(code_file: str, artifacts_dir: str, timeout: float) -> Optional[subprocess.CompletedProcess]:
+def _execute_in_docker(code_file: str, artifacts_dir: str, timeout: float, stdin_data: str = "") -> Optional[subprocess.CompletedProcess]:
     """Executes code file inside an isolated unprivileged Docker container with resource limits."""
     if not is_docker_available():
         return None
     try:
         cmd = [
             "docker", "run", "--rm",
+            "-i",
             "--network", "none",
             "--read-only",
             "--cpus", "0.5",
             "--memory", "128m",
+            "--memory-swap", "128m",
             "--pids-limit", "64",
             "-v", f"{artifacts_dir}:/artifacts:rw",
             "-v", f"{code_file}:/app/code.py:ro",
             "python:3.11-slim",
             "python", "/app/code.py"
         ]
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return subprocess.run(cmd, input=stdin_data if stdin_data else None, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         raise
     except Exception as e:
@@ -263,7 +265,7 @@ def execute_in_sandbox(code: str, timeout: float = SANDBOX_TIMEOUT, stdin_data: 
 
         try:
             # Attempt Docker isolation if running, else subprocess with fail-closed check
-            proc = _execute_in_docker(code_file, artifacts_dir, timeout=timeout)
+            proc = _execute_in_docker(code_file, artifacts_dir, timeout=timeout, stdin_data=stdin_data)
             if proc is None:
                 allow_unsafe = os.getenv("ALLOW_UNSAFE_SUBPROCESS", "0").strip().lower() in ("1", "true", "yes")
                 if not allow_unsafe:
