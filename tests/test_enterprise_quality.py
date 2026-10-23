@@ -13,8 +13,6 @@ Independently verifies all 9 software quality attributes:
 """
 
 import time
-import json
-import pytest
 from unittest.mock import MagicMock, patch
 from concurrent.futures import ThreadPoolExecutor
 
@@ -183,8 +181,8 @@ def test_scalability_concurrent_request_simulation():
 def test_flexibility_pluggable_custom_provider():
     """Verify that registering a custom AI provider adapter works dynamically without modifying core engine."""
     from core.providers import register_provider, PROVIDER_REGISTRY
-    from core.providers.base import BaseProvider, ProviderStatus
-    from typing import Dict, Any, List, Optional
+    from core.providers.base import BaseProvider
+    from typing import Dict, Any, List
 
     class MockCustomProvider(BaseProvider):
         @property

@@ -6,7 +6,7 @@ correlation matrix calculation, and baseline model comparisons with downloadable
 
 import os
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 import pandas as pd
 import numpy as np
 
@@ -372,7 +372,7 @@ def export_evaluation_report(results: Dict[str, Any], output_path: str) -> str:
     best = results.get("best_model", "None")
 
     lines = [
-        f"# 📊 SPARK-AI AutoML Evaluation & Model Audit Report",
+        "# 📊 SPARK-AI AutoML Evaluation & Model Audit Report",
         f"**Generated at:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}",
         f"**Task Type:** {task}",
         f"**Target Column:** `{target}`",
@@ -381,7 +381,7 @@ def export_evaluation_report(results: Dict[str, Any], output_path: str) -> str:
         "## 1. Dataset Partitioning",
         f"- **Training Samples:** {results.get('train_samples', 'N/A')}",
         f"- **Holdout Test Samples:** {results.get('test_samples', 'N/A')}",
-        f"- **Data Leakage Safeguard:** Train/Test split isolated at random_state=42; features fitted strictly on training partition.",
+        "- **Data Leakage Safeguard:** Train/Test split isolated at random_state=42; features fitted strictly on training partition.",
         ""
     ]
 

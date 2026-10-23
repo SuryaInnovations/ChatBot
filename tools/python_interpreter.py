@@ -8,13 +8,11 @@ Implements Capability 04:
 - Never runs arbitrary code in the web server process.
 """
 
-import os
 import time
 import logging
 from typing import Dict, Any, Optional
 
 from tools.sandbox import execute_in_sandbox, validate_code_safety
-from services.artifact_service import default_artifact_service
 
 logger = logging.getLogger("chatbot.tools.python_interpreter")
 

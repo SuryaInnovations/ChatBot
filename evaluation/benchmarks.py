@@ -8,9 +8,8 @@ Implements automated evaluation checks against:
 - Output formatting and structured citation integrity.
 """
 
-import time
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 from monitoring.metrics import default_metrics
 from security.prompt_injection import scan_for_prompt_injection

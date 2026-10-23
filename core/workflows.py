@@ -20,8 +20,6 @@ from tools.study_engine import generate_exam_pattern_answers, generate_nptel_mcq
 from core.learning import create_flashcard
 from tools.automl import load_dataset, analyze_data_quality, train_and_compare_models, train_clustering_model, export_evaluation_report
 from tools.coding_lab import inspect_project_structure, generate_code_patch, compare_test_runs
-from tools.web_search import search_duckduckgo
-from core.verification import verify_evidence_and_citations
 
 logger = logging.getLogger("chatbot.workflows")
 

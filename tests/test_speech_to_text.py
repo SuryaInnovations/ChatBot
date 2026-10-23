@@ -2,10 +2,8 @@
 tests/test_speech_to_text.py — Unit tests for Speech-to-Text transcription.
 """
 
-import os
 import io
 import wave
-import pytest
 from tools.speech_to_text import transcribe_audio, transcribe_audio_file
 
 

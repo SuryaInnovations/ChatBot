@@ -9,7 +9,7 @@ Implements Capability 08:
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 from workspace.file_manager import default_file_manager
 from workspace.patch_manager import default_patch_manager

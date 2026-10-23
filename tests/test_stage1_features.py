@@ -7,13 +7,10 @@ Unit tests for SPARK-AI Stage 1 Features:
 5. Personal memory granular editing
 """
 
-import os
-import pytest
 import pandas as pd
 from tools.study_engine import generate_exam_pattern_answers, generate_nptel_mcqs, parse_mock_test_submission
 from tools.coding_lab import run_coding_workspace
-from tools.automl import analyze_data_quality, compute_eda_dashboard_data
-from tools.rag import SemanticRAGIndex
+from tools.automl import analyze_data_quality
 from core.memory import add_user_topic_weakness, add_user_topic_strength, get_user_memory
 
 

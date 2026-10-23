@@ -10,7 +10,7 @@ import socket
 import ipaddress
 import urllib.parse
 import logging
-from typing import Tuple, List, Set, Optional
+from typing import Tuple, Set, Optional
 
 logger = logging.getLogger("chatbot.security.url_policy")
 

@@ -23,7 +23,6 @@ def generate_presentation_pptx(
 ) -> str:
     """Generates a PPTX presentation from structured slide data."""
     from pptx import Presentation
-    from pptx.util import Inches, Pt
 
     prs = Presentation()
 

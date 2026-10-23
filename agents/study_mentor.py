@@ -8,12 +8,10 @@ Implements Capability 07:
 - Tracks study topic mastery and progress.
 """
 
-import time
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
-from tools.study_engine import generate_exam_pattern_answers, generate_nptel_mcqs
-from tools.high_value_tools import generate_quiz_flashcards
+from tools.study_engine import generate_nptel_mcqs
 from knowledge.retriever import default_retriever
 
 logger = logging.getLogger("chatbot.agents.study_mentor")

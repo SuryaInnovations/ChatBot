@@ -10,7 +10,7 @@ Implements:
 
 import time
 import threading
-from typing import Generator, Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable
 from dataclasses import dataclass, field
 
 

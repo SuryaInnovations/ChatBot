@@ -3,10 +3,8 @@ Study Engine: Exam Patterns, Academic Notes Structuring, NPTEL-Style MCQs, and M
 Generates 2-mark, 5-mark, and 10-mark structured answers, calibrated MCQs, and timed mock exams.
 """
 
-import re
-import json
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 logger = logging.getLogger("chatbot.study_engine")
 

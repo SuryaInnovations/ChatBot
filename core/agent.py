@@ -19,7 +19,6 @@ from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, List, Optional, Callable, Set
 
 from core.verification import verify_evidence_and_citations, VerificationReport
-from core.verifier import verify_solution
 
 logger = logging.getLogger("chatbot.agent")
 

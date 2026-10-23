@@ -7,12 +7,11 @@ Allows users to export:
 - Analysis reports in formatted Markdown or PDF.
 """
 
-import os
 import io
 import json
 import zipfile
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from security.privacy import default_privacy_manager
 
 logger = logging.getLogger("chatbot.services.export_service")

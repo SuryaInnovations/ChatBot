@@ -11,9 +11,6 @@ Verifies all 10 architectural phases:
 8. Observability latency percentiles & token cost estimation
 """
 
-import os
-import json
-import pytest
 from unittest.mock import MagicMock, patch
 
 # 1. Sandbox Path Sanitization & AST Checks
@@ -88,7 +85,7 @@ def test_query_complexity_classification():
 
 # 3. Autonomous Plan-Act-Verify Agent & Orchestrator Delegation
 def test_bounded_agent_execution():
-    from core.agent import BoundedAutonomousAgent, ActionStatus
+    from core.agent import BoundedAutonomousAgent
 
     mock_llm = MagicMock()
     mock_llm.generate.return_value = {
@@ -180,8 +177,7 @@ def test_memory_privacy_compliance():
         update_user_memory,
         get_user_memory,
         delete_user_data,
-        export_user_data,
-        clear_user_history
+        export_user_data
     )
 
     test_uid = "privacy_test_user@example.com"

@@ -8,10 +8,9 @@ Provides:
 - URL validation and claim-to-evidence alignment.
 """
 
-import time
 import urllib.parse
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 
 
 @dataclass

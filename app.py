@@ -6,6 +6,7 @@ Implements intent-driven routing, multi-provider fallback, and resilient error h
 import os
 import sys
 import re
+import json
 import logging
 import base64
 import urllib.parse
@@ -268,9 +269,8 @@ def render_provider_management_ui(in_dialog: bool = False):
     and masked API key inputs for dynamic updates without restart.
     """
     from core.llm_provider import LLMProvider
-    from core.models import get_supported_models, get_default_model, validate_provider_model
+    from core.models import get_supported_models, get_default_model
     from core.rate_limiter import is_circuit_open, get_circuit_cooldown_remaining, reset_circuit_breaker
-    from core.provider_status import get_provider_status, record_provider_success
 
     st.markdown("#### ⚡ AI Provider Status & Diagnostics")
     
@@ -475,7 +475,6 @@ except (ImportError, AttributeError):
     import importlib
     import profile_ui
     importlib.reload(profile_ui)
-    from profile_ui import render_profile_widget
     compute_initials = getattr(profile_ui, "compute_initials", None)
     if compute_initials is None:
         def compute_initials(name: str) -> str:

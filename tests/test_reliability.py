@@ -324,13 +324,13 @@ class TestReliabilitySuite(unittest.TestCase):
         from core.llm_provider import LLMProvider
         from core.provider_manager import ProviderManager
 
-        # 1. Verify default timeout is 8.0s
-        self.assertEqual(PROVIDER_TIMEOUT_SECONDS, 8.0)
+        # 1. Verify default timeout is 30.0s
+        self.assertEqual(PROVIDER_TIMEOUT_SECONDS, 30.0)
         default_llm = LLMProvider()
-        self.assertEqual(default_llm.timeout, 8.0)
+        self.assertEqual(default_llm.timeout, 30.0)
 
         default_pm = ProviderManager()
-        self.assertEqual(default_pm.timeout, 8.0)
+        self.assertEqual(default_pm.timeout, 30.0)
 
         # 2. Mock slow provider exceeding a configured timeout (0.15s), verifying failover
         def slow_gemini(*args, **kwargs):

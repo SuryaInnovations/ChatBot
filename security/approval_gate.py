@@ -8,8 +8,6 @@ Includes cryptographic token generation, approval expiration, and tamper-evident
 
 import time
 import uuid
-import hmac
-import hashlib
 import logging
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field, asdict

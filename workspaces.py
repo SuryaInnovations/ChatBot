@@ -10,7 +10,7 @@ Implements specialized interactive workspaces:
 
 import os
 import time
-import json
+from typing import Optional, List, Dict, Any
 import pandas as pd
 import streamlit as st
 
@@ -19,7 +19,7 @@ from tools.study_engine import generate_exam_pattern_answers, generate_nptel_mcq
 from tools.coding_lab import run_coding_workspace
 from tools.automl import load_dataset, analyze_data_quality, compute_eda_dashboard_data, train_and_compare_models
 from core.vision import analyze_image_multimodal
-from core.memory import add_user_topic_weakness, add_user_topic_strength, get_user_memory
+from core.memory import add_user_topic_weakness, add_user_topic_strength
 from core.learning import (
     get_due_flashcards,
     record_flashcard_review,
@@ -218,7 +218,7 @@ def render_study_mentor_workspace(user_id: str = "default"):
         if "active_mock_questions" not in st.session_state:
             st.session_state.active_mock_questions = [
                 {
-                    "question": f"What is the average time complexity of searching in a Balanced Binary Search Tree (AVL/Red-Black)?",
+                    "question": "What is the average time complexity of searching in a Balanced Binary Search Tree (AVL/Red-Black)?",
                     "options": ["A) O(1)", "B) O(log N)", "C) O(N)", "D) O(N log N)"],
                     "correct_option": "B",
                     "explanation": "Balanced BSTs guarantee maximum height of O(log N), so search operations take logarithmic time.",
@@ -749,7 +749,7 @@ def render_agent_workspace(user_id: str = "default"):
 
     if start_agent and goal_prompt.strip():
         from core.llm_provider import LLMProvider
-        from core.agent import BoundedAutonomousAgent, ActionStatus
+        from core.agent import BoundedAutonomousAgent
         
         status_box = st.status("Initializing autonomous Plan-Act-Verify loop...", expanded=True)
         

@@ -8,9 +8,8 @@ Implements:
 - Model provider health checks and transparent fallback.
 """
 
-import time
 import logging
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Optional, Tuple
 from enum import Enum
 
 logger = logging.getLogger("chatbot.core.model_router")

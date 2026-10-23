@@ -10,8 +10,6 @@ Extracts structured text and metadata from:
 """
 
 import os
-import csv
-import json
 import logging
 from typing import List, Dict, Any, Optional
 

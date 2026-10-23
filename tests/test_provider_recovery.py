@@ -17,7 +17,7 @@ Verifies all 11 core recovery scenarios with deterministic mocks:
 import os
 import sys
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -28,8 +28,7 @@ from core.llm_provider import (
     AuthenticationError,
     QuotaExhaustedError,
     RateLimitError,
-    ProviderConnectionError,
-    InvalidProviderModelError
+    ProviderConnectionError
 )
 from core.providers import (
     GeminiProvider,
@@ -45,7 +44,7 @@ from core.provider_status import (
     record_provider_success,
     is_provider_errored
 )
-from core.rate_limiter import reset_circuit_breaker, reset_rate_limiter_pacing
+from core.rate_limiter import reset_rate_limiter_pacing
 
 
 class TestProviderRecoverySuite(unittest.TestCase):

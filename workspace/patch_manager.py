@@ -10,7 +10,7 @@ Implements:
 
 import difflib
 import logging
-from typing import Dict, Any, Tuple, Optional
+from typing import Tuple
 
 logger = logging.getLogger("chatbot.workspace.patch_manager")
 

@@ -11,7 +11,7 @@ Implements Capability 12 (Charts):
 import os
 import uuid
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 import pandas as pd
 
 from services.artifact_service import default_artifact_service

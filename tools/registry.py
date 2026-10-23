@@ -46,7 +46,7 @@ from tools.high_value_tools import (
 from tools.rag import search_documents_semantic, compare_documents_semantic
 from tools.study_engine import generate_exam_pattern_answers, generate_nptel_mcqs
 from tools.coding_lab import run_coding_workspace
-from tools.automl import train_and_compare_models, analyze_data_quality, compute_eda_dashboard_data
+from tools.automl import train_and_compare_models
 from core.vision import analyze_image_multimodal
 from tools.weather import get_live_weather
 

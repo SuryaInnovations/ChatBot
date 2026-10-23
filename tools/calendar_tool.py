@@ -8,13 +8,11 @@ Supports:
 - Enforcing user confirmation for calendar scheduling.
 """
 
-import os
 import uuid
 import datetime
 from typing import Dict, Any, Optional
 
 from services.artifact_service import default_artifact_service
-from security.approval_gate import default_approval_gate
 
 
 def create_calendar_event(

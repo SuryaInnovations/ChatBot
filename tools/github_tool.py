@@ -11,7 +11,7 @@ Implements Capability 11:
 import os
 import time
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 import httpx
 
 from security.approval_gate import default_approval_gate

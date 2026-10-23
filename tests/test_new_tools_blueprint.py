@@ -26,7 +26,6 @@ Tests:
 import os
 import time
 import tempfile
-import pytest
 
 # 1. Security Tests
 def test_approval_gate_workflow():
@@ -342,7 +341,7 @@ def test_task_queue_execution():
 
 # 11. Workflows & Evaluation Tests
 def test_workflows_and_benchmarks():
-    from workflows.templates import get_workflow_template, list_workflows
+    from workflows.templates import get_workflow_template
     from evaluation.benchmarks import BenchmarkHarness
 
     wf = get_workflow_template("study_quiz")

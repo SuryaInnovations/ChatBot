@@ -10,9 +10,9 @@ Implements Capability 16:
 
 import time
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
-from core.interview_bank import get_interview_question, get_questions_by_topic
+from core.interview_bank import get_interview_question
 
 logger = logging.getLogger("chatbot.agents.interview_agent")
 

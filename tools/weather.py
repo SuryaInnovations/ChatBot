@@ -8,7 +8,7 @@ import json
 import logging
 import urllib.request
 import urllib.parse
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 logger = logging.getLogger("chatbot.tools.weather")
 

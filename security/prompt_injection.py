@@ -9,7 +9,7 @@ is always treated as UNTRUSTED DATA and never as instructions that override syst
 import re
 import html
 import logging
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List
 
 logger = logging.getLogger("chatbot.security.prompt_injection")
 

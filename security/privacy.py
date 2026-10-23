@@ -9,7 +9,7 @@ Provides:
 
 import re
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
 logger = logging.getLogger("chatbot.security.privacy")
 

@@ -11,7 +11,7 @@ Allows users to:
 
 import json
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from memory.long_term import default_long_term_memory
 
 logger = logging.getLogger("chatbot.memory.preferences")

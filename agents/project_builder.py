@@ -8,12 +8,10 @@ Implements Capability 17:
 - Bundles complete projects into downloadable ZIP archives with artifact registration.
 """
 
-import os
-import uuid
 import logging
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, Optional, Callable
 
-from workspace.project_templates import get_template, TEMPLATES
+from workspace.project_templates import get_template
 from workspace.test_runner import run_code_tests
 from services.export_service import default_export_service
 from services.artifact_service import default_artifact_service

@@ -8,6 +8,10 @@ artifacts/*
 outputs/*
 !outputs/.gitkeep
 *.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 .streamlit/secrets.toml
 secrets.toml
 .pytest_cache/

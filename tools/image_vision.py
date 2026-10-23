@@ -9,9 +9,8 @@ Implements Capability 05:
 """
 
 import os
-import io
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from PIL import Image
 
 from core.vision import analyze_image_multimodal

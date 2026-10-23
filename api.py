@@ -9,8 +9,8 @@ import shutil
 from typing import Optional, List, Dict, Any
 import uuid
 import time
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 current_dir = os.path.dirname(os.path.abspath(__file__))

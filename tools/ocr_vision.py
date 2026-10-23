@@ -9,7 +9,7 @@ Implements:
 
 import os
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from tools.image_vision import optimize_image_for_vision
 from core.vision import analyze_image_multimodal

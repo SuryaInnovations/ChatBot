@@ -9,12 +9,11 @@ Implements Step 5 of the SPARK-AI Architecture:
 - User data governance (view, edit, delete, and export study records).
 """
 
-import os
 import json
 import sqlite3
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Tuple
 
 from core.memory import DB_PATH, get_user_memory, add_user_topic_weakness, add_user_topic_strength
 

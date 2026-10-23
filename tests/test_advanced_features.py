@@ -12,14 +12,13 @@ tests/test_advanced_features.py — Comprehensive tests for Steps 2 to 10:
 import os
 import tempfile
 import pandas as pd
-import pytest
 
-from core.agent import BoundedAutonomousAgent, ActionStatus
-from core.verification import verify_evidence_and_citations, EvidenceItem
-from core.learning import calculate_sm2, create_flashcard, get_due_flashcards, record_flashcard_review, get_topic_mastery_report, generate_personalized_study_plan
-from tools.coding_lab import generate_code_patch, compare_test_runs, analyze_code_quality_and_security, inspect_project_structure
+from core.agent import BoundedAutonomousAgent
+from core.verification import verify_evidence_and_citations
+from core.learning import calculate_sm2, create_flashcard, get_due_flashcards, record_flashcard_review, generate_personalized_study_plan
+from tools.coding_lab import generate_code_patch, compare_test_runs, analyze_code_quality_and_security
 from tools.automl import train_clustering_model, export_evaluation_report, train_and_compare_models
-from tools.rag import compute_file_checksum, wrap_untrusted_document_context, get_retrieval_diagnostics
+from tools.rag import compute_file_checksum, wrap_untrusted_document_context
 from core.workflows import WorkflowEngine
 
 

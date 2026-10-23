@@ -8,8 +8,7 @@ Validates:
 5. Search Bar response handling and orchestrator integration
 """
 
-import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from core.intent import detect_intent, IntentType
 from tools.weather import get_live_weather
 from tools.high_value_tools import solve_math_step_by_step, explain_code_error
@@ -126,10 +125,11 @@ def test_orchestrator_intelligent_routing():
     orch = ChatbotOrchestrator(provider=mock_llm)
 
     # 1. Weather routing
-    s_weather = ConversationSession()
-    res_w = orch.process_message(s_weather, "What is the weather in Saint-Merri?", search_mode="Auto")
-    assert any("Weather" in b for b in res_w.get("verification_badges", []))
-    assert any(t["name"] == "get_live_weather" for t in res_w.get("executed_tools", []))
+    with patch("tools.weather.get_live_weather", return_value={"success": True, "location": "Saint-Merri", "summary": "Sunny 20°C"}):
+        s_weather = ConversationSession()
+        res_w = orch.process_message(s_weather, "What is the weather in Saint-Merri?", search_mode="Auto")
+        assert any("Weather" in b for b in res_w.get("verification_badges", []))
+        assert any(t["name"] == "get_live_weather" for t in res_w.get("executed_tools", []))
 
     # 2. Math routing
     s_math = ConversationSession()
