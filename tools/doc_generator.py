@@ -4,19 +4,25 @@ Document generation tool supporting PDF, DOCX, XLSX, CSV, Markdown, and TXT file
 
 import os
 import uuid
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 def generate_document(
     format_type: str,
     title: str,
     content: str,
-    filename: str = None,
-    table_data: List[List[Any]] = None
+    filename: Optional[str] = None,
+    table_data: Optional[List[List[Any]]] = None,
+    user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Generates a document file (PDF, DOCX, XLSX, CSV, Markdown, TXT) and returns file details.
+    Ensures per-user artifact directory isolation when user_id is supplied.
     """
+    import re
     outputs_dir = os.path.join(os.getcwd(), "outputs")
+    if user_id:
+        safe_uid = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(user_id).strip().lower())
+        outputs_dir = os.path.join(outputs_dir, safe_uid)
     os.makedirs(outputs_dir, exist_ok=True)
 
     format_type = format_type.lower().strip()
@@ -30,7 +36,7 @@ def generate_document(
     try:
         if format_type == "pdf":
             from reportlab.lib.pagesizes import letter
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.styles import getSampleStyleSheet
             from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
             from reportlab.lib import colors
 

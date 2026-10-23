@@ -3,7 +3,7 @@ File intelligence and analysis tool supporting CSV, Excel, PDF, DOCX, TXT, JSON,
 """
 
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 def analyze_file(file_path: str, max_chars: int = 5000) -> Dict[str, Any]:
     """

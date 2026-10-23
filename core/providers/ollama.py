@@ -3,7 +3,8 @@ Ollama Local Provider Adapter.
 """
 
 import os
-from typing import List, Dict, Any, Optional
+import logging
+from typing import List, Dict, Any, Optional, cast
 import httpx
 
 from core.providers.base import (
@@ -11,9 +12,11 @@ from core.providers.base import (
     ProviderStatus,
     ProviderError,
     ProviderConnectionError,
-    ModelUnavailableError,
-    InvalidRequestError
+    ModelUnavailableError
 )
+from core.models import validate_provider_model
+
+logger = logging.getLogger("chatbot.providers.ollama")
 
 class OllamaProvider(BaseProvider):
     @property
@@ -26,10 +29,10 @@ class OllamaProvider(BaseProvider):
 
     @property
     def default_model(self) -> str:
-        return "llama3.2"
+        return os.environ.get("OLLAMA_MODEL", "llama3.2").strip() or "llama3.2"
 
     def _get_base_url(self) -> str:
-        return self.base_url or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        return str(self.base_url or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"))
 
     def _get_server_root(self) -> str:
         url = self._get_base_url()
@@ -44,6 +47,19 @@ class OllamaProvider(BaseProvider):
                 return res.status_code == 200
         except Exception:
             return False
+
+    def list_available_models(self) -> List[str]:
+        """Lists locally installed Ollama models."""
+        try:
+            root = self._get_server_root()
+            with httpx.Client(timeout=2.0) as client:
+                res = client.get(f"{root}/api/tags")
+                if res.status_code == 200:
+                    models_data = res.json().get("models", [])
+                    return [m.get("name") for m in models_data]
+        except Exception as e:
+            logger.warning(f"Failed to list Ollama models: {e}")
+        return []
 
     def health_check(self) -> Dict[str, Any]:
         root = self._get_server_root()
@@ -60,7 +76,7 @@ class OllamaProvider(BaseProvider):
                         "message": f"Ollama online with {len(names)} model(s)"
                     }
                 return {"status": ProviderStatus.NETWORK_ERROR.value, "reachable": False, "message": f"Ollama HTTP {res.status_code}"}
-        except Exception as e:
+        except Exception:
             return {"status": ProviderStatus.NOT_CONFIGURED.value, "reachable": False, "message": "Ollama server is not running"}
 
     def generate(
@@ -75,6 +91,9 @@ class OllamaProvider(BaseProvider):
             raise ProviderConnectionError("Ollama server is not reachable at " + self._get_server_root())
 
         selected_model = model or self.model or self.default_model
+
+        # HARD VALIDATION LAYER: strictly rejects foreign models before any local request
+        validate_provider_model(self.code, selected_model)
 
         try:
             import openai
@@ -91,7 +110,7 @@ class OllamaProvider(BaseProvider):
 
             response = client.chat.completions.create(
                 model=selected_model,
-                messages=formatted,
+                messages=cast(Any, formatted),
                 temperature=temperature
             )
             content = (response.choices[0].message.content or "").strip()
@@ -104,7 +123,8 @@ class OllamaProvider(BaseProvider):
         except Exception as e:
             err_str = str(e).lower()
             if "model" in err_str and ("not found" in err_str or "does not exist" in err_str):
-                raise ModelUnavailableError(f"Ollama model '{selected_model}' not installed: {str(e)}")
+                avail = self.list_available_models()
+                raise ModelUnavailableError(f"Ollama model '{selected_model}' not installed.", available_models=avail)
             elif "connection" in err_str or "timeout" in err_str:
                 raise ProviderConnectionError(f"Ollama connection error: {str(e)}")
             raise ProviderError(f"Ollama error: {str(e)}", is_recoverable=True)

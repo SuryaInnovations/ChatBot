@@ -22,7 +22,7 @@ def solve_math_expression(expression: str, task_type: str = "solve") -> Dict[str
                 "result": str(result),
                 "latex": latex_res
             }
-        elif task_type == "solve_equation":
+        elif task_type in ("solve_equation", "solve") or ("=" in expression and task_type not in ("simplify", "derivative", "integral")):
             # Assume expression equals 0 or split on '='
             if "=" in expression:
                 left, right = expression.split("=", 1)
@@ -33,9 +33,11 @@ def solve_math_expression(expression: str, task_type: str = "solve") -> Dict[str
             if not symbols:
                 return {"success": False, "error": "No variable found in equation"}
             solutions = sp.solve(expr, symbols[0])
+            res_str = ", ".join([str(s) for s in solutions])
             return {
                 "success": True,
                 "variable": str(symbols[0]),
+                "result": res_str,
                 "solutions": [str(s) for s in solutions],
                 "latex": sp.latex(solutions)
             }

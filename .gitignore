@@ -7,3 +7,10 @@ artifacts/*
 !artifacts/.gitkeep
 outputs/*
 !outputs/.gitkeep
+*.db
+.streamlit/secrets.toml
+secrets.toml
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+uv.lock
