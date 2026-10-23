@@ -29,6 +29,14 @@ reportlab==4.2.5
 python-docx==1.1.2
 openpyxl==3.1.5
 python-pptx>=1.0.0
+Pillow>=10.0.0
+
+# Database & Async Persistence
+sqlalchemy>=2.0.0
+aiosqlite>=0.20.0
+
+# Audio & Voice Processing
+SpeechRecognition>=3.10.0
 
 # Testing & Quality Assurance
 pytest==8.3.4
