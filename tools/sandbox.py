@@ -266,9 +266,11 @@ def execute_in_sandbox(code: str, timeout: float = SANDBOX_TIMEOUT, stdin_data: 
         try:
             # Attempt Docker isolation if running, else subprocess with fail-closed check
             proc = _execute_in_docker(code_file, artifacts_dir, timeout=timeout, stdin_data=stdin_data)
-            if proc is None:
-                allow_unsafe = os.getenv("ALLOW_UNSAFE_SUBPROCESS", "0").strip().lower() in ("1", "true", "yes")
-                if not allow_unsafe:
+            allow_unsafe = os.getenv("ALLOW_UNSAFE_SUBPROCESS", "0").strip().lower() in ("1", "true", "yes")
+
+            # Fall back to hardened subprocess if Docker is unavailable OR if the lightweight Docker image lacks installed libraries (e.g., numpy, pandas) during local/CI test runs
+            if proc is None or (proc.returncode != 0 and "No module named" in (proc.stderr or "") and allow_unsafe):
+                if not allow_unsafe and proc is None:
                     logger.warning("[SANDBOX FAIL-CLOSED] Docker is unavailable and ALLOW_UNSAFE_SUBPROCESS is not set.")
                     return {
                         "success": False,
