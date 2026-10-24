@@ -1090,13 +1090,110 @@ def render_assistant_response(
     with col_copy:
         text_to_copy = processed_content if processed_content else content
         st.session_state["_copied_text"] = text_to_copy
-        b64_content = base64.b64encode(text_to_copy.encode("utf-8")).decode("utf-8")
-        copy_btn_html = (
-            f'<button type="button" class="spark-copy-btn" data-content-b64="{b64_content}" '
-            f'onclick="if(window.__sparkCopyB64){{window.__sparkCopyB64(this);}}else{{try{{var bin=atob(this.getAttribute(\'data-content-b64\'));var by=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)by[i]=bin.charCodeAt(i);var txt=new TextDecoder(\'utf-8\').decode(by);var ta=document.createElement(\'textarea\');ta.value=txt;ta.setAttribute(\'readonly\',\'\');ta.style.position=\'fixed\';ta.style.left=\'-9999px\';document.body.appendChild(ta);ta.focus();ta.select();document.execCommand(\'copy\');document.body.removeChild(ta);this.innerHTML=\'✅ Copied!\';var btn=this;setTimeout(function(){{btn.innerHTML=\'📋 Copy\';}},2000);}}catch(e){{console.error(e);}}}}" '
-            f'title="Copy response to clipboard">📋 Copy</button>'
-        )
-        st.html(copy_btn_html, unsafe_allow_javascript=True)
+        json_content = json.dumps(text_to_copy)
+        copy_widget_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+html, body {{ background: transparent; overflow: hidden; height: 100%; width: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+.cp-btn {{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+    height: 38px;
+    padding: 0 8px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #1e293b;
+    background-color: transparent;
+    border: 1px solid rgba(49, 51, 63, 0.2);
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease-in-out;
+    white-space: nowrap;
+}}
+.cp-btn:hover {{
+    border-color: #2F80ED;
+    color: #2F80ED;
+    background-color: rgba(47, 128, 237, 0.08);
+}}
+.cp-btn:active {{
+    transform: scale(0.97);
+}}
+.cp-btn.copied {{
+    border-color: #10B981 !important;
+    color: #059669 !important;
+    background-color: rgba(16, 185, 129, 0.12) !important;
+}}
+</style>
+</head>
+<body>
+<button class="cp-btn" id="btn" onclick="execCopy()" title="Copy response to clipboard">📋 Copy</button>
+<textarea id="ta" style="position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none;"></textarea>
+<script>
+const contentToCopy = {json_content};
+function execCopy() {{
+    let ok = false;
+    try {{
+        if (navigator.clipboard && window.isSecureContext) {{
+            navigator.clipboard.writeText(contentToCopy);
+            ok = true;
+        }}
+    }} catch(e) {{}}
+
+    if (!ok) {{
+        try {{
+            if (window.parent && window.parent.navigator && window.parent.navigator.clipboard) {{
+                window.parent.navigator.clipboard.writeText(contentToCopy);
+                ok = true;
+            }}
+        }} catch(e) {{}}
+    }}
+
+    if (!ok) {{
+        try {{
+            const ta = document.getElementById('ta');
+            ta.value = contentToCopy;
+            ta.focus();
+            ta.select();
+            ta.setSelectionRange(0, ta.value.length);
+            ok = document.execCommand('copy');
+        }} catch(e) {{}}
+    }}
+
+    if (!ok) {{
+        try {{
+            const pta = window.parent.document.createElement('textarea');
+            pta.value = contentToCopy;
+            pta.style.position = 'fixed';
+            pta.style.left = '-9999px';
+            pta.style.opacity = '0';
+            window.parent.document.body.appendChild(pta);
+            pta.focus();
+            pta.select();
+            ok = window.parent.document.execCommand('copy');
+            window.parent.document.body.removeChild(pta);
+        }} catch(e) {{}}
+    }}
+
+    const b = document.getElementById('btn');
+    b.innerHTML = '✅ Copied!';
+    b.classList.add('copied');
+    setTimeout(() => {{
+        b.innerHTML = '📋 Copy';
+        b.classList.remove('copied');
+    }}, 2000);
+}}
+</script>
+</body>
+</html>"""
+        import streamlit.components.v1 as components
+        components.html(copy_widget_html, height=40)
 
 # Display History
 for idx, msg in enumerate(st.session_state.session.messages):
