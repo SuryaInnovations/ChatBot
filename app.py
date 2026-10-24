@@ -650,7 +650,7 @@ with st.sidebar:
 
     # Workspace defaults
     st.session_state.setdefault("selected_workspace", "💬 Chat & Web Search")
-    st.session_state.setdefault("auto_switch_workspace", True)
+    st.session_state.setdefault("auto_switch_workspace", False)
 
     # 3. Search Input Box
     search_query = st.text_input(
@@ -713,38 +713,6 @@ with st.sidebar:
                         st.session_state.session.clear()
                         st.session_state.current_chat_title = "New chat"
                     st.rerun()
-
-    # Workspace Switcher in Sidebar
-    st.markdown("<hr style='margin:16px 0 10px 0;border-top:1px solid var(--border-subtle);'>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size:12px;font-weight:600;color:var(--text-muted);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:6px;'>Specialized Workspaces</div>", unsafe_allow_html=True)
-    workspace_options = [
-        "💬 Chat & Web Search",
-        "🤖 Autonomous Agent",
-        "📖 Study Mentor",
-        "📄 Document Chat",
-        "💻 Coding Lab",
-        "📊 Data Science / AutoML",
-        "🖼️ Vision & Screenshots"
-    ]
-    current_selected = st.session_state.get("selected_workspace", "💬 Chat & Web Search")
-    if current_selected not in workspace_options:
-        current_selected = "💬 Chat & Web Search"
-    
-    selected_ws = st.selectbox(
-        "Workspace",
-        options=workspace_options,
-        index=workspace_options.index(current_selected),
-        key="sidebar_ws_selector",
-        label_visibility="collapsed"
-    )
-    if selected_ws != st.session_state.get("selected_workspace"):
-        st.session_state.selected_workspace = selected_ws
-        st.rerun()
-
-    # AI Provider Diagnostics & Settings in Sidebar
-    st.markdown("<hr style='margin:16px 0 10px 0;border-top:1px solid var(--border-subtle);'>", unsafe_allow_html=True)
-    with st.expander("⚡ AI Providers & Health", expanded=False):
-        render_provider_management_ui(in_dialog=False)
 
 
 # Render Active Workspace Studio if selected
@@ -1112,7 +1080,7 @@ def render_assistant_response(
         )
 
     # Feedback & Utility Action Row (Thumbs, Copy)
-    col_fb1, col_fb2, col_copy, _ = st.columns([0.06, 0.06, 0.12, 0.76])
+    col_fb1, col_fb2, col_copy, _ = st.columns([0.06, 0.06, 0.14, 0.74])
     with col_fb1:
         if st.button("👍", key=f"thumb_up_{msg_idx}", help="Helpful answer"):
             st.toast("Feedback recorded: Helpful 👍")
@@ -1120,9 +1088,15 @@ def render_assistant_response(
         if st.button("👎", key=f"thumb_down_{msg_idx}", help="Needs improvement"):
             st.toast("Feedback recorded: Needs improvement 👎")
     with col_copy:
-        if st.button("📋 Copy", key=f"btn_copy_resp_{msg_idx}", help="Copy response to clipboard"):
-            st.session_state["_copied_text"] = content
-            st.toast("📋 Response copied to clipboard!")
+        text_to_copy = processed_content if processed_content else content
+        st.session_state["_copied_text"] = text_to_copy
+        b64_content = base64.b64encode(text_to_copy.encode("utf-8")).decode("utf-8")
+        copy_btn_html = (
+            f'<button type="button" class="spark-copy-btn" data-content-b64="{b64_content}" '
+            f'onclick="if(window.__sparkCopyB64){{window.__sparkCopyB64(this);}}else{{try{{var bin=atob(this.getAttribute(\'data-content-b64\'));var by=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)by[i]=bin.charCodeAt(i);var txt=new TextDecoder(\'utf-8\').decode(by);var ta=document.createElement(\'textarea\');ta.value=txt;ta.setAttribute(\'readonly\',\'\');ta.style.position=\'fixed\';ta.style.left=\'-9999px\';document.body.appendChild(ta);ta.focus();ta.select();document.execCommand(\'copy\');document.body.removeChild(ta);this.innerHTML=\'✅ Copied!\';var btn=this;setTimeout(function(){{btn.innerHTML=\'📋 Copy\';}},2000);}}catch(e){{console.error(e);}}}}" '
+            f'title="Copy response to clipboard">📋 Copy</button>'
+        )
+        st.html(copy_btn_html, unsafe_allow_javascript=True)
 
 # Display History
 for idx, msg in enumerate(st.session_state.session.messages):
@@ -1251,7 +1225,7 @@ with st.form("ai_search_bar_form", clear_on_submit=True):
                         st.session_state.session.attach_file(sanitized_name, file_path, uf.type, metadata=analysis)
                         st.toast(f"Attached: {sanitized_name}")
 
-                if st.session_state.get("auto_switch_workspace", True):
+                if st.session_state.get("auto_switch_workspace", False):
                     from workspaces import detect_target_workspace
                     target_from_files = detect_target_workspace("", st.session_state.session.attached_files)
                     if target_from_files and target_from_files != st.session_state.get("selected_workspace"):
@@ -1422,7 +1396,7 @@ if prompt_to_process:
         st.markdown(prompt_to_process)
 
     # 0. Task-Driven Automatic Workspace Switcher
-    if st.session_state.get("auto_switch_workspace", True):
+    if st.session_state.get("auto_switch_workspace", False):
         from workspaces import detect_target_workspace
         target_ws = detect_target_workspace(prompt_to_process, st.session_state.session.attached_files)
         curr_ws = st.session_state.get("selected_workspace", "💬 Chat & Web Search")

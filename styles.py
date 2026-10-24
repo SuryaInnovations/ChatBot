@@ -3428,14 +3428,191 @@ div[class*="st-key-eduvyn_hidden_logout_trigger"],
     font-weight: 500;
 }
 
+/* ====================================================
+   Spark Copy Button & Feedback Styling
+   ==================================================== */
+.spark-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.6;
+    padding: 0.25rem 0.75rem;
+    min-height: 38.4px;
+    height: 38.4px;
+    border-radius: 8px;
+    background-color: transparent;
+    color: var(--text-color, #0F172A);
+    border: 1px solid rgba(49, 51, 63, 0.2);
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    user-select: none;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.spark-copy-btn:hover {
+    border-color: #2F80ED;
+    color: #2F80ED;
+    background-color: rgba(47, 128, 237, 0.08);
+}
+
+.spark-copy-btn:active {
+    transform: scale(0.97);
+}
+
+.spark-copy-btn.spark-copied {
+    border-color: #10B981 !important;
+    color: #059669 !important;
+    background-color: rgba(16, 185, 129, 0.12) !important;
+}
+
+/* Floating copy toast */
+#spark-clipboard-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background-color: #0F172A;
+    color: #ffffff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35);
+    z-index: 9999999;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+}
+
 </style>
+"""
+
+def get_clipboard_helper_js() -> str:
+    """Returns client-side JavaScript for robust clipboard operations across HTTP and HTTPS."""
+    return """
+<script>
+(function() {
+    if (window.__sparkClipboardLoaded) return;
+    window.__sparkClipboardLoaded = true;
+
+    window.__sparkShowToast = function(msg) {
+        var toast = document.getElementById('spark-clipboard-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'spark-clipboard-toast';
+            document.body.appendChild(toast);
+        }
+        toast.innerHTML = msg;
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+        if (window._sparkToastTimer) clearTimeout(window._sparkToastTimer);
+        window._sparkToastTimer = setTimeout(function() {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(10px)';
+        }, 2500);
+    };
+
+    window.__sparkCopyText = function(text, btnElement) {
+        if (!text) return;
+
+        function fallbackCopy(str) {
+            var ta = document.createElement('textarea');
+            ta.value = str;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            ta.style.top = '0';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            ta.setSelectionRange(0, ta.value.length);
+            var ok = false;
+            try {
+                ok = document.execCommand('copy');
+            } catch(e) {
+                console.error('execCommand copy error:', e);
+            }
+            document.body.removeChild(ta);
+            return ok;
+        }
+
+        function onDone(ok) {
+            if (btnElement) {
+                var orig = btnElement.getAttribute('data-orig-label') || btnElement.innerHTML;
+                if (!btnElement.getAttribute('data-orig-label')) {
+                    btnElement.setAttribute('data-orig-label', orig);
+                }
+                btnElement.innerHTML = ok ? '✅ Copied!' : '⚠️ Failed';
+                if (ok) {
+                    btnElement.classList.add('spark-copied');
+                    window.__sparkShowToast('📋 Response copied to clipboard!');
+                }
+                setTimeout(function() {
+                    btnElement.innerHTML = btnElement.getAttribute('data-orig-label') || '📋 Copy';
+                    btnElement.classList.remove('spark-copied');
+                }, 2000);
+            } else if (ok) {
+                window.__sparkShowToast('📋 Response copied to clipboard!');
+            }
+        }
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(function() {
+                onDone(true);
+            }).catch(function(err) {
+                console.warn('Clipboard API rejected, falling back:', err);
+                var ok = fallbackCopy(text);
+                onDone(ok);
+            });
+        } else {
+            var ok = fallbackCopy(text);
+            onDone(ok);
+        }
+    };
+
+    window.__sparkCopyB64 = function(btn) {
+        if (!btn) return;
+        var b64 = btn.getAttribute('data-content-b64');
+        if (!b64) return;
+        try {
+            var bin = atob(b64);
+            var bytes = new Uint8Array(bin.length);
+            for (var i = 0; i < bin.length; i++) {
+                bytes[i] = bin.charCodeAt(i);
+            }
+            var text = new TextDecoder('utf-8').decode(bytes);
+            window.__sparkCopyText(text, btn);
+        } catch(e) {
+            console.error('B64 decode error, attempting fallback:', e);
+            try {
+                var decoded = decodeURIComponent(escape(atob(b64)));
+                window.__sparkCopyText(decoded, btn);
+            } catch(e2) {
+                window.__sparkCopyText(atob(b64), btn);
+            }
+        }
+    };
+})();
+</script>
 """
 
 def apply_custom_styles():
     """Injects custom stylesheet into Streamlit app."""
     import streamlit as st
+    css = get_custom_css()
+    js = get_clipboard_helper_js()
     if hasattr(st, "html"):
-        st.html(get_custom_css())
+        st.html(css)
+        st.html(js, unsafe_allow_javascript=True)
     else:
-        st.markdown(get_custom_css(), unsafe_allow_html=True)
+        st.markdown(css + js, unsafe_allow_html=True)
 
